@@ -1287,11 +1287,13 @@
                 });
                 let processedText = cleanedLines.join('\n');
 
+                // 2. 특수 문자 제거 (---, ", *, , !!, “, ”, ")
                 processedText = processedText.replace(/---/g, ''); 
                 processedText = processedText.replace(/"/g, ''); 
                 processedText = processedText.replace(/\*/g, '');
                 processedText = processedText.replace(/,/g, '');
                 processedText = processedText.replace(/!!/g, '!');
+                processedText = processedText.replace(/[“”"]/g, '');
 
                 cleanedFullText = processedText; 
                 cleanedTranscriptOutput.value = cleanedFullText;
