@@ -235,41 +235,61 @@ async function updateDailySubSnapshot(ch){
 }
 
 /* 공용: 비디오 렌더 & 정렬 */
-function renderVideoList(videos,listId,kwId){
-  const wrap=qs(listId);
-  if(!wrap) return;
-  if(!videos.length){ wrap.innerHTML='<p class="muted">표시할 영상이 없습니다.</p>'; if(kwId && qs(kwId)) qs(kwId).innerHTML=''; return; }
-  wrap.innerHTML='';
-  videos.forEach(v=>{
-    const card=document.createElement('div'); card.className='video-card';
-    card.innerHTML=`
+function renderVideoList(videos, listId, kwId) {
+  const wrap = qs(listId);
+  if (!wrap) return;
+  if (!videos.length) {
+    wrap.innerHTML = '<p class="muted">표시할 영상이 없습니다.</p>';
+    if (kwId && qs(kwId)) qs(kwId).innerHTML = '';
+    return;
+  }
+  wrap.innerHTML = '';
+  videos.forEach(v => {
+    const card = document.createElement('div');
+    card.className = 'video-card';
+    card.innerHTML = `
       <a class="video-link" target="_blank" href="https://www.youtube.com/watch?v=${v.id}">
-        <div class="thumb-wrap"><img class="thumb" src="${v.thumbnail}" alt=""></div>
         <div class="v-title">${v.title}</div>
-        <div class="v-meta">
-          <span>조회수: ${fmt(v.viewCount)}</span>
-          <span>업로드: ${moment(v.publishedAt).format('YYYY-MM-DD')}</span>
+        <div class="v-meta first-line">
+          <span class="channel-name">${v.__ch?.title || '알 수 없음'}</span>
           <span>구독자: ${fmt(v.__ch.subscriberCount)}</span>
-          ${v.mutantIndex? `<span>돌연변이지수: <strong>${v.mutantIndex}</strong></span>`:''}
+          <span>조회수: ${fmt(v.viewCount)}</span>
         </div>
-        ${v.mutantIndex? `<div class="badge">${v.mutantIndex}</div>`:''}
+        <div class="v-meta second-line">
+          <span class="upload-date">업로드: ${moment(v.publishedAt).format('YYYY-MM-DD')}</span>
+          <label class="done-label">
+            <input type="checkbox" data-done="${v.id}"/> 영상제작완료
+          </label>
+        </div>
+        <div class="v-meta third-line">
+          ${v.mutantIndex ? `<div class="badge">${v.mutantIndex}</div>` : ''}
+        </div>
       </a>
-      <label style="display:block;padding:0 12px 12px"><input type="checkbox" data-done="${v.id}"/> 영상제작완료</label>`;
-    idbGet('doneVideos',[v.__ch?.channelId||v.snippet?.channelId||'', v.id]).then(rec=>{ if(rec) { const cb=card.querySelector(`[data-done='${v.id}']`); if(cb) cb.checked=true; }});
-    card.addEventListener('change', async (e)=>{
-      if(e.target && e.target.matches(`[data-done='${v.id}']`)){
-        if(e.target.checked){ await idbPut('doneVideos',{channelId:(v.__ch?.channelId||v.snippet?.channelId||''), videoId:v.id, done:true, ts:Date.now()}); }
-        else { await idbDel('doneVideos',[v.__ch?.channelId||v.snippet?.channelId||'', v.id]); }
+    `;
+    idbGet('doneVideos', [v.__ch?.channelId || v.snippet?.channelId || '', v.id]).then(rec => {
+      if (rec) {
+        const cb = card.querySelector(`[data-done='${v.id}']`);
+        if (cb) cb.checked = true;
+      }
+    });
+    card.addEventListener('change', async (e) => {
+      if (e.target && e.target.matches(`[data-done='${v.id}']`)) {
+        if (e.target.checked) {
+          await idbPut('doneVideos', { channelId: (v.__ch?.channelId || v.snippet?.channelId || ''), videoId: v.id, done: true, ts: Date.now() });
+        } else {
+          await idbDel('doneVideos', [v.__ch?.channelId || v.snippet?.channelId || '', v.id]);
+        }
       }
     });
     wrap.appendChild(card);
   });
-  if(kwId && qs(kwId)){
-    const f=extractKeywords(videos.map(v=>v.title||'').join(' '));
-    const top=f.slice(0,12);
-    qs(kwId).innerHTML=top.map(([w,c])=>`<span class="kw">${w} ${c}회</span>`).join('');
+  if (kwId && qs(kwId)) {
+    const f = extractKeywords(videos.map(v => v.title || '').join(' '));
+    const top = f.slice(0, 12);
+    qs(kwId).innerHTML = top.map(([w, c]) => `<span class="kw">${w} ${c}회</span>`).join('');
   }
 }
+
 function sortVideoCards(list,mode){
   if(mode==='views') list.sort((a,b)=>b.viewCount-a.viewCount);
   else if(mode==='subscribers') list.sort((a,b)=>b.__ch.subscriberCount-a.__ch.subscriberCount);
