@@ -139,3 +139,33 @@ h1{margin:6px 0 14px;text-align:center;color:var(--brand)}
 .success-message{color:#1db954;background:#e8f5e8;padding:8px;border-radius:6px;margin:8px 0;font-size:14px}
 body.dark .error-message{background:#5c2427;color:#ff8a8a;}
 body.dark .success-message{background:#2b542b;color:#a5d6a7;}
+
+
+.v-meta {
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  color: var(--muted);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.first-line {
+  justify-content: flex-start;
+  gap: 12px;
+}
+.second-line {
+  justify-content: space-between;
+  width: 100%;
+}
+.done-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.third-line {
+  justify-content: center;
+  width: 100%;
+  margin-top: 6px;
+}
