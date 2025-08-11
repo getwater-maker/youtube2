@@ -169,3 +169,23 @@ body.dark .success-message{background:#2b542b;color:#a5d6a7;}
   width: 100%;
   margin-top: 6px;
 }
+
+.v-meta.first-line {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  align-items: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.v-meta.first-line .channel-name {
+  text-align: left;
+}
+
+.v-meta.first-line .subscriber-count {
+  text-align: center;
+}
+
+.v-meta.first-line .view-count {
+  text-align: right;
+}
