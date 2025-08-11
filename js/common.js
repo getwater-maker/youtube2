@@ -229,11 +229,12 @@ function renderVideoList(videos, listId, kwId) {
           <img class="thumb" src="${v.thumbnail || (v.snippet?.thumbnails?.medium?.url) || ''}" alt="썸네일">
         </div>
         <div class="v-title">${v.title}</div>
-        <div class="v-meta first-line">
-          <span class="channel-name">${v.__ch?.title || '알 수 없음'}</span>
-          <span>구독자: ${fmt(v.__ch.subscriberCount)}</span>
-          <span>조회수: ${fmt(v.viewCount)}</span>
-        </div>
+<div class="v-meta first-line">
+  <span class="channel-name">${v.__ch?.title || (v.snippet?.channelTitle) || '알 수 없음'}</span>
+  <span class="subscriber-count">구독자: ${fmt(v.__ch?.subscriberCount)}</span>
+  <span class="view-count">조회수: ${fmt(v.viewCount)}</span>
+</div>
+
         <div class="v-meta second-line">
           <span class="upload-date">업로드: ${moment(v.publishedAt).format('YYYY-MM-DD')}</span>
           <label class="done-label">
