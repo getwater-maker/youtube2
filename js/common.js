@@ -525,3 +525,32 @@ document.addEventListener('DOMContentLoaded', () => {
   // 초기 페이지 로드 시 전체 데이터 새로고침
   refreshAll();
 });
+
+/* 채널 정보 갱신 (업로드 목록 ID, 최신 업로드 날짜) */
+async function ensureUploadsAndLatest(ch) {
+  if (ch.uploadsPlaylistId && ch.latestUploadDate) return;
+  
+  const res = await yt('channels', {
+    part: 'contentDetails,snippet',
+    id: ch.id
+  });
+  
+  const it = res.items[0];
+  if (it) {
+    ch.uploadsPlaylistId = it.contentDetails.relatedPlaylists.uploads;
+    
+    // 최신 업로드 날짜 가져오기
+    if (ch.uploadsPlaylistId) {
+      const pl = await yt('playlistItems', {
+        part: 'snippet',
+        playlistId: ch.uploadsPlaylistId,
+        maxResults: 1
+      });
+      if (pl.items && pl.items[0]) {
+        ch.latestUploadDate = pl.items[0].snippet.publishedAt;
+      }
+    }
+    
+    await idbPut('my_channels', ch);
+  }
+}
