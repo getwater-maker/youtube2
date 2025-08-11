@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>채널 분석 - 유튜브 채널 모니터</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="light">
+  <div class="container">
+    <h1>채널 분석</h1>
+
+    <!-- 1. 채널 기본 정보 및 구독자 추이 -->
+    <section id="section1" class="analysis-section">
+      <h2>채널 기본 정보 및 구독자 성장</h2>
+      <div id="channel-info" class="channel-info">
+        <!-- 채널 이미지, 이름, 구독자 수 등 표시 -->
+      </div>
+      <canvas id="subscribers-chart" style="max-width:100%; height:300px;"></canvas>
+    </section>
+
+    <!-- 2. 영상 업로드 추이 및 조회수 분석 -->
+    <section id="section2" class="analysis-section">
+      <h2>영상 업로드 및 조회수 분석</h2>
+      <canvas id="upload-frequency-chart" style="max-width:100%; height:300px;"></canvas>
+      <canvas id="views-chart" style="max-width:100%; height:300px; margin-top:30px;"></canvas>
+      <div id="recent-videos" class="video-list" style="margin-top:20px;">
+        <!-- 최근 영상 리스트 -->
+      </div>
+    </section>
+
+    <!-- 3. 인기 영상, 키워드, 경쟁 채널 비교 -->
+    <section id="section3" class="analysis-section">
+      <h2>인기 영상 및 키워드 분석, 경쟁 채널 비교</h2>
+
+      <h3>인기 영상</h3>
+      <div id="top-videos" class="video-list"></div>
+
+      <h3>키워드 분석</h3>
+      <div id="keyword-analysis" class="keywords"></div>
+
+      <h3>경쟁 채널 비교</h3>
+      <canvas id="competitor-chart" style="max-width:100%; height:300px; margin-top:20px;"></canvas>
+    </section>
+
+  </div>
+
+  <script src="js/channel_analysis.js"></script>
+</body>
+</html>
