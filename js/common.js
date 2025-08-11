@@ -249,6 +249,9 @@ function renderVideoList(videos, listId, kwId) {
     card.className = 'video-card';
     card.innerHTML = `
       <a class="video-link" target="_blank" href="https://www.youtube.com/watch?v=${v.id}">
+        <div class="thumb-wrap">
+          <img class="thumb" src="${v.thumbnail || (v.snippet?.thumbnails?.medium?.url) || ''}" alt="썸네일">
+        </div>
         <div class="v-title">${v.title}</div>
         <div class="v-meta first-line">
           <span class="channel-name">${v.__ch?.title || '알 수 없음'}</span>
@@ -266,12 +269,14 @@ function renderVideoList(videos, listId, kwId) {
         </div>
       </a>
     `;
+
     idbGet('doneVideos', [v.__ch?.channelId || v.snippet?.channelId || '', v.id]).then(rec => {
       if (rec) {
         const cb = card.querySelector(`[data-done='${v.id}']`);
         if (cb) cb.checked = true;
       }
     });
+
     card.addEventListener('change', async (e) => {
       if (e.target && e.target.matches(`[data-done='${v.id}']`)) {
         if (e.target.checked) {
@@ -281,14 +286,17 @@ function renderVideoList(videos, listId, kwId) {
         }
       }
     });
+
     wrap.appendChild(card);
   });
+
   if (kwId && qs(kwId)) {
     const f = extractKeywords(videos.map(v => v.title || '').join(' '));
     const top = f.slice(0, 12);
     qs(kwId).innerHTML = top.map(([w, c]) => `<span class="kw">${w} ${c}회</span>`).join('');
   }
 }
+
 
 function sortVideoCards(list,mode){
   if(mode==='views') list.sort((a,b)=>b.viewCount-a.viewCount);
