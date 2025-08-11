@@ -302,6 +302,59 @@ async function deleteChannel(id) {
   toast('채널이 삭제되었습니다.');
 }
 
+/* 채널 정보 갱신 (업로드 목록 ID, 최신 업로드 날짜) */
+async function ensureUploadsAndLatest(ch) {
+  if (ch.uploadsPlaylistId && ch.latestUploadDate) return;
+  
+  const res = await yt('channels', {
+    part: 'contentDetails,snippet',
+    id: ch.id
+  });
+  
+  const it = res.items[0];
+  if (it) {
+    ch.uploadsPlaylistId = it.contentDetails.relatedPlaylists.uploads;
+    
+    // 최신 업로드 날짜 가져오기
+    if (ch.uploadsPlaylistId) {
+      const pl = await yt('playlistItems', {
+        part: 'snippet',
+        playlistId: ch.uploadsPlaylistId,
+        maxResults: 1
+      });
+      if (pl.items && pl.items[0]) {
+        ch.latestUploadDate = pl.items[0].snippet.publishedAt;
+      }
+    }
+    
+    await idbPut('my_channels', ch);
+  }
+}
+
+/* 일별 구독자 수 스냅샷 */
+async function updateDailySubSnapshot(ch) {
+  const today = moment().format('YYYY-MM-DD');
+  const existing = await idbGet('dailySubs', [ch.id, today]);
+
+  // 오늘 데이터가 이미 존재하면 스킵
+  if (existing) return;
+
+  const res = await yt('channels', {
+    part: 'statistics',
+    id: ch.id
+  });
+  const newSubs = parseInt(res.items[0]?.statistics?.subscriberCount || '0', 10);
+  
+  if (newSubs > 0) {
+    const dailyData = {
+      channelId: ch.id,
+      date: today,
+      subscriberCount: newSubs
+    };
+    await idbPut('dailySubs', dailyData);
+  }
+}
+
 /* 영상 리스트 렌더링 - 썸네일 포함, 3줄 레이아웃 */
 function renderVideoList(videos, listId, kwId) {
   const wrap = qs(listId);
@@ -525,32 +578,3 @@ document.addEventListener('DOMContentLoaded', () => {
   // 초기 페이지 로드 시 전체 데이터 새로고침
   refreshAll();
 });
-
-/* 채널 정보 갱신 (업로드 목록 ID, 최신 업로드 날짜) */
-async function ensureUploadsAndLatest(ch) {
-  if (ch.uploadsPlaylistId && ch.latestUploadDate) return;
-  
-  const res = await yt('channels', {
-    part: 'contentDetails,snippet',
-    id: ch.id
-  });
-  
-  const it = res.items[0];
-  if (it) {
-    ch.uploadsPlaylistId = it.contentDetails.relatedPlaylists.uploads;
-    
-    // 최신 업로드 날짜 가져오기
-    if (ch.uploadsPlaylistId) {
-      const pl = await yt('playlistItems', {
-        part: 'snippet',
-        playlistId: ch.uploadsPlaylistId,
-        maxResults: 1
-      });
-      if (pl.items && pl.items[0]) {
-        ch.latestUploadDate = pl.items[0].snippet.publishedAt;
-      }
-    }
-    
-    await idbPut('my_channels', ch);
-  }
-}
