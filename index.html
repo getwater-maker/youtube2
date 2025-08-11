@@ -88,26 +88,29 @@
         <div id="latest-list" class="video-list"><p class="muted">채널을 추가하여 영상을 분석해주세요.</p></div>
       </section>
 
-      <!-- 여기에 키워드 분석 섹션 추가 -->
       <section id="keyword-section" class="col" style="margin-top: 24px;">
         <h2>키워드 분석</h2>
         <div id="keyword-list" class="keywords">
           <p class="muted">키워드가 없습니다.</p>
         </div>
       </section>
-    </div>      
     </div>
   </div>
 
-  <!-- API 키 모달 -->
   <div id="modal-api" class="modal">
     <div class="content">
       <span class="close" data-close="modal-api">×</span>
       <h3>API 키 입력</h3>
       <p>최대 5개까지 저장하고 자동 순환 사용합니다.</p>
-      <div id="api-inputs" class="api-inputs"></div>
+      <div id="api-inputs" class="api-inputs">
+        <input type="text" id="api-key-1" placeholder="API Key 1"/>
+        <input type="text" id="api-key-2" placeholder="API Key 2"/>
+        <input type="text" id="api-key-3" placeholder="API Key 3"/>
+        <input type="text" id="api-key-4" placeholder="API Key 4"/>
+        <input type="text" id="api-key-5" placeholder="API Key 5"/>
+      </div>
       <div class="row" style="margin-top:8px">
-        <input type="file" id="api-file" accept=".txt" style="display:none"/>
+        <input type="file" id="api-file" accept=".txt" style="display:none" />
         <button id="api-file-btn" class="file-label" type="button">API 키 업로드(.txt)</button>
         <button id="api-save" class="btn" type="button">저장</button>
         <button id="api-download" class="btn" type="button">다운로드</button>
@@ -117,7 +120,6 @@
     </div>
   </div>
 
-  <!-- 채널 추가 모달 -->
   <div id="modal-add" class="modal">
     <div class="content">
       <span class="close" data-close="modal-add">×</span>
@@ -147,7 +149,6 @@
     </div>
   </div>
 
-  <!-- 채널 분석 진입 모달 -->
   <div id="modal-analyze" class="modal">
     <div class="content">
       <span class="close" data-close="modal-analyze">×</span>
@@ -159,7 +160,6 @@
 
   <div id="toast" class="toast"></div>
 
-  <!-- JS -->
   <script src="js/common.js"></script>
   <script src="js/section1.js"></script>
   <script src="js/section2.js"></script>
