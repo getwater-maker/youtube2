@@ -20,21 +20,73 @@ const setupEventHandlers = () => {
         localStorage.setItem('theme', document.body.classList.contains('dark') ? 'dark' : 'light');
     });
 
-    // API key modal
+    // API key modal - 수정됨
     qs('#btn-api').addEventListener('click', () => {
         qs('#modal-api').style.display = 'block';
-        const storedKeys = localStorage.getItem('yt_api_keys');
-        if (storedKeys) {
-            qs('#api-keys').value = JSON.parse(storedKeys).join('\n');
+        const storedKeys = JSON.parse(localStorage.getItem('yt_api_keys') || '[]');
+        for (let i = 1; i <= 5; i++) {
+            const input = qs(`#api-key-${i}`);
+            input.value = storedKeys[i - 1] || '';
         }
     });
 
+    // API 키 저장 - 수정됨
     qs('#save-api-keys').addEventListener('click', () => {
-        const keys = qs('#api-keys').value.split('\n').map(k => k.trim()).filter(k => k);
+        const keys = [];
+        for (let i = 1; i <= 5; i++) {
+            const key = qs(`#api-key-${i}`).value.trim();
+            if (key) keys.push(key);
+        }
+        if (keys.length === 0) {
+            return showError('유효한 API 키를 하나 이상 입력해주세요.');
+        }
         setApiKeys(keys);
         qs('#modal-api').style.display = 'none';
         showSuccess('API 키가 저장되었습니다.');
         refreshAllContent();
+    });
+    
+    // API 키 파일 업로드 - 수정됨
+    qs('#btn-upload-api').addEventListener('click', () => {
+        qs('#api-file-upload').click();
+    });
+    qs('#api-file-upload').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const keys = event.target.result.split('\n').map(k => k.trim()).filter(k => k);
+            for (let i = 1; i <= 5; i++) {
+                const input = qs(`#api-key-${i}`);
+                input.value = keys[i - 1] || '';
+            }
+            showSuccess('API 키 파일을 불러왔습니다.');
+        };
+        reader.readAsText(file);
+    });
+    
+    // API 키 파일 다운로드 - 수정됨
+    qs('#btn-download-api').addEventListener('click', () => {
+        const keys = [];
+        for (let i = 1; i <= 5; i++) {
+            const key = qs(`#api-key-${i}`).value.trim();
+            if (key) keys.push(key);
+        }
+        if (keys.length === 0) {
+            return showError('다운로드할 API 키가 없습니다.');
+        }
+        const data = keys.join('\n');
+        const blob = new Blob([data], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'youtube_api_keys.txt';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showSuccess('API 키를 다운로드했습니다.');
     });
 
     // Add channel modal
