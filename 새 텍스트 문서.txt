@@ -1,0 +1,24 @@
+프로젝트/
+├── index.html 
+├── oauth-callback.html 
+├── css/
+│   └── styles.css 
+└── js/
+    ├── scene-parser.js 
+    ├── channels.js 
+    ├── common.js 
+    ├── main.js 
+    ├── main-monitor.js 
+    ├── my-channels.js 
+    ├── navigation.js 
+    ├── oauth-manager.js
+    ├── title-presets.js
+    ├── video-manager.js
+    └── videos.js 
+
+난 코딩을 못해요. 그러니 아무리 설명해도 난 몰라요. 토큰을 아껴야하니 전체파일 코딩보다는 수정해야할 첫문장과 마지막 문장을 알려주시고, 그 내용을 어떻게 수정해야 하는지 알려주세요
+복사 붙여넣기로 활용할께요.
+파일 구조는 이대로 유지합니다. 파일을 하나로 합치는 상황은 만들지 말아주세요
+
+
+학습먼저 해주세요. 추가할 파일이 더 있어요. 완료되었다면 "완료"출력해주세요

@@ -1,168 +1,408 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>로이가 만든 유튜브 채널 모니터</title>
-  <link rel="icon" href="favicon.ico"/>
-  <link rel="stylesheet" href="css/style.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.45/moment-timezone-with-data.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>유튜브 채널 모니터</title>
+  <link rel="stylesheet" href="css/styles.css" />
+	<link rel="icon" type="image/x-icon" href="favicon.ico" />
+	<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+
+
+  <!-- 외부 라이브러리 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.45/moment-timezone.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <!-- [추가 시작: Google API/GIS] -->
+<script src="https://apis.google.com/js/api.js" async defer></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<!-- [추가 끝: Google API/GIS] -->
+
 </head>
-<body class="light">
+
+<body class="dark">
   <div class="container">
-    <h1>로이가 만든 유튜브 채널 모니터</h1>
-    <div class="single-header">
-      <button id="btn-analyze" class="analyze-btn">채널 분석</button>
-      <div class="row">
-        <button id="btn-api" class="api-btn">API 키 입력</button>
-        <button id="btn-toggle-theme" class="toggle-btn">다크 모드</button>
+    <!-- 헤더 -->
+    <header class="header-content">
+      <div class="logo-section">
+        <div class="logo-icon">Y</div>
+        <h1>유튜브 채널 모니터</h1>
+      </div>
+
+      <nav class="nav-buttons">
+        <button id="btn-my-channels" class="btn btn-my-channel nav-section">👥 내채널</button>
+        <button id="btn-channels" class="btn btn-secondary nav-section active">📺 채널관리</button>
+        <button id="btn-videos" class="btn btn-secondary nav-section">🎥 영상분석</button>
+        <button id="btn-scene-parser" class="btn btn-secondary nav-section">🖼️ 대본작업</button>
+        <button id="btn-analyze" class="btn btn-primary">📊 채널 분석</button>
+        <button id="btn-toggle-theme" class="btn btn-secondary">라이트 모드</button>
+		<button id="btn-api" class="btn btn-secondary">🔑 API 키</button>
+        <button id="btn-oauth-settings" class="btn btn-secondary">🔐 OAuth 설정</button>
+      </nav>
+    </header>
+
+    <!-- 메인 -->
+    <main id="main-content" class="section-view">
+      <!-- 내채널들 -->
+      <section class="section" id="section-my-channels" data-section="my-channels" style="display:none;">
+  <div class="section-header">
+    <h2>💥 내 채널들</h2>
+    <div class="section-actions mych-controls">
+      <span id="mych-status" class="muted">로그인 필요</span>
+      <button id="btn-oauth-signin" class="btn btn-primary">🔗 Google 로그인 / 채널 연동</button>
+      <button id="btn-oauth-signout" class="btn btn-secondary" style="display:none;">🚪 로그아웃</button>
+      <button id="btn-open-video-manager" class="btn btn-success">🎬 내 영상 관리</button>
+    </div>
+  </div>
+
+<!-- 내 채널/구독 표시 영역 -->
+  <div id="my-channels-list"></div>
+  <div id="my-subscriptions-list"></div>
+
+  <!-- 영상 관리 통합 섹션 -->
+  <div id="video-management-section" style="margin-top: 20px; border-top: 2px solid var(--border); padding-top: 20px;">
+    <div class="section-header">
+      <h3>🎬 내 영상 관리</h3>
+      <div class="section-actions">
+        <button id="btn-fetch-videos" class="btn btn-primary">📥 영상 불러오기</button>
+        <button id="btn-bulk-title-edit" class="btn btn-success">✏️ 일괄 제목 수정</button>
+        <button id="btn-video-analytics" class="btn btn-info">📊 영상 분석</button>
       </div>
     </div>
 
-    <div id="main-content" class="three-col">
-      <section class="col" data-col="channels">
-        <div class="col-head" draggable="true">
-          <h2>채널 추가</h2>
-          <div class="col-actions">
-            <button id="btn-add-channel" class="btn">+ 채널 추가</button>
-            <button id="btn-export-channels" class="btn">내보내기</button>
-            <button id="btn-import-channels" class="btn">가져오기</button>
-            <input type="file" id="file-import-channels" accept="application/json" style="display:none" />
-            <span>등록: <span id="channel-count">0</span></span>
-          </div>
-        </div>
-        <div class="sort-row">
-          <label>정렬:
-            <select id="sort-channels">
-              <option value="subscribers" selected>구독자수</option>
-              <option value="videos">영상갯수</option>
-              <option value="latest">최근업로드</option>
-            </select>
-          </label>
-        </div>
-        <div id="channel-list" class="channel-list"><p class="muted">채널을 추가하세요.</p></div>
+    <!-- 검색/필터 조건 -->
+    <div class="video-filters" style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
+      <div class="input-group">
+        <label>시작일:</label>
+        <input type="date" id="video-date-start" class="form-control" />
+      </div>
+      <div class="input-group">
+        <label>종료일:</label>
+        <input type="date" id="video-date-end" class="form-control" />
+      </div>
+      <div class="input-group">
+        <label>최소 조회수:</label>
+        <input type="number" id="video-min-views" class="form-control" placeholder="0" min="0" />
+      </div>
+      <div class="input-group">
+        <label>정렬:</label>
+        <select id="video-sort" class="form-control">
+          <option value="date">최신순</option>
+          <option value="views">조회수순</option>
+          <option value="title">제목순</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 제목 프리셋 관리 -->
+    <div class="title-presets-section" style="background: var(--glass-bg); padding: 16px; border-radius: 12px; margin-bottom: 16px;">
+      <h4>🏷️ 제목 프리셋 관리</h4>
+      <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px;">
+        <span>저장된 프리셋: <strong id="preset-count">0</strong>개</span>
+        <button id="btn-save-presets" class="btn btn-primary">💾 프리셋 저장</button>
+        <button id="btn-clear-presets" class="btn btn-danger">🗑️ 전체 삭제</button>
+      </div>
+      <textarea id="preset-input" placeholder="한 줄에 하나씩 제목을 입력하세요...&#10;예시:&#10;놀라운 발견! 이것만 알면 끝&#10;완전 정복! 초보자 가이드&#10;실전 꿀팁 대공개" style="width: 100%; height: 80px; resize: vertical;"></textarea>
+      <div id="preset-preview" style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;"></div>
+    </div>
+
+    <!-- 영상 목록 테이블 -->
+    <div class="video-list-container">
+      <div id="video-status" class="muted" style="margin-bottom: 12px;">영상을 불러오려면 위의 조건을 설정하고 '📥 영상 불러오기'를 클릭하세요.</div>
+      <div class="table-responsive">
+        <table class="video-table">
+          <thead>
+            <tr>
+              <th style="width: 40px;"><input type="checkbox" id="select-all-videos" /></th>
+              <th style="width: 140px;">썸네일</th>
+              <th style="min-width: 300px;">제목 & 정보</th>
+              <th style="width: 100px;">조회수</th>
+              <th style="width: 120px;">게시일</th>
+              <th style="width: 160px;">작업</th>
+            </tr>
+          </thead>
+          <tbody id="video-table-body">
+            <tr>
+              <td colspan="6" class="text-center muted" style="padding: 40px;">영상 데이터가 없습니다.<br><small>로그인 후 영상을 불러와 주세요.</small></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 등록된 채널 관리 (기존 기능 유지) -->
+  <div id="registered-channels-section" style="margin-top: 20px; border-top: 2px solid var(--border); padding-top: 20px;">
+    <div class="section-header">
+      <h3>📺 등록된 채널 관리</h3>
+      <div class="section-actions">
+        <button id="btn-add-channel" class="btn btn-primary">+ 채널 추가</button>
+        <button id="btn-export-channels" class="btn btn-secondary">📥 내보내기</button>
+        <button id="btn-import-channels" class="btn btn-secondary">📤 가져오기</button>
+        <input id="file-import-channels" type="file" accept=".json" style="display:none" />
+      </div>
+    </div>
+    <div id="registered-channels-list" class="channel-list horizontal-grid"></div>
+  </div>
+
+  </div>
+</section>
+
+        <!-- my-channels.js가 채워 넣습니다 -->
+        <div id="my-channels-content"></div>
       </section>
 
-      <section class="col" data-col="mutant">
-        <div class="col-head" draggable="true">
-          <h2>돌연변이 영상</h2>
-          <div class="col-actions">
-            <div class="date-range">
-              <button data-period="1m">1개월</button>
-              <button data-period="3m">3개월</button>
-              <button class="active" data-period="6m">6개월</button>
-              <button data-period="all">전체</button>
-            </div>
+      <!-- 채널 관리 -->
+      <section class="section" id="section-channels" data-section="channels">
+        <div class="section-header">
+          <h2>📺 채널 관리</h2>
+          <div class="section-actions">
+            <button id="btn-add-channel" class="btn btn-primary">+ 채널 추가</button>
+            <button id="btn-export-channels" class="btn btn-secondary">📥 내보내기</button>
+            <button id="btn-import-channels" class="btn btn-secondary">📤 가져오기</button>
+            <input id="file-import-channels" type="file" accept=".json" style="display:none" />
+            <label style="margin-left:12px; font-weight:700;">
+              정렬
+              <select id="sort-channels" style="margin-left:6px; padding:6px 10px; border:2px solid var(--border); border-radius:6px; background:var(--card); color:var(--text); font-weight:600;">
+                <option value="subscribers">구독자수</option>
+                <option value="videos">영상갯수</option>
+                <option value="latest">최근업로드</option>
+              </select>
+            </label>
           </div>
         </div>
-        <div class="sort-row">
-          <label>정렬:
-            <select id="sort-mutant">
-              <option value="mutantIndex" selected>돌연변이지수</option>
+
+        <div id="channel-list" class="channel-list horizontal-grid">
+          <div class="empty-state">
+            <div class="empty-icon">📺</div>
+            <p class="muted">채널을 추가하여 시작하세요</p>
+            <button class="btn btn-primary" onclick="document.getElementById('btn-add-channel').click()">첫 채널 추가하기</button>
+          </div>
+        </div>
+
+        <div id="channel-pagination" class="pagination"></div>
+      </section>
+
+      <!-- 통합 영상 분석 -->
+      <section class="section" id="section-videos" data-section="videos" style="display:none;">
+        <div class="section-header">
+          <h2>🎥 영상 분석</h2>
+          <div class="section-actions">
+            <!-- 정렬 -->
+            <select id="sort-videos" style="margin-right:16px; padding:6px 12px; border:2px solid var(--border); border-radius:6px; background:var(--card); color:var(--text); font-weight:600;">
               <option value="views">조회수</option>
-              <option value="subscribers">구독자수</option>
-              <option value="latest">최근업로드</option>
-            </select>
-          </label>
-        </div>
-        <div id="mutant-keywords" class="keywords"></div>
-        <div id="mutant-list" class="video-list"><p class="muted">채널을 추가하여 영상을 분석해주세요.</p></div>
-      </section>
-
-      <section class="col" data-col="latest">
-        <div class="col-head" draggable="true"><h2>최신 영상</h2></div>
-        <div class="sort-row">
-          <label>정렬:
-            <select id="sort-latest">
-              <option value="views" selected>조회수</option>
               <option value="subscribers">구독자수</option>
               <option value="latest">최근업로드</option>
               <option value="mutantIndex">돌연변이지수</option>
             </select>
-          </label>
+
+            <!-- 탭 -->
+            <button class="video-tab" data-video-tab="mutant">🚀 돌연변이</button>
+            <button class="video-tab active" data-video-tab="latest">📱 최신영상</button>
+
+            <!-- 조회수 필터 -->
+            <div class="views-range" style="margin-left:16px;">
+              <button class="views-btn" data-views="10000">1만</button>
+              <button class="views-btn" data-views="30000">3만</button>
+              <button class="views-btn active" data-views="50000">5만</button>
+            </div>
+
+            <!-- 기간 필터 -->
+            <div class="date-range" style="margin-left:8px;">
+              <button class="period-btn" data-period="1w">1주</button>
+              <button class="period-btn" data-period="2w">2주</button>
+              <button class="period-btn active" data-period="1m">한달</button>
+              <button class="period-btn" data-period="all">전체</button>
+            </div>
+
+            <!-- 동작 -->
+            <div class="video-actions-group" style="margin-left:16px;">
+              <button id="btn-refresh-videos" class="btn btn-primary">🔄 다시불러오기</button>
+            </div>
+          </div>
         </div>
-        <div id="latest-keywords" class="keywords"></div>
-        <div id="latest-list" class="video-list"><p class="muted">채널을 추가하여 영상을 분석해주세요.</p></div>
+
+        <!-- 돌연변이 탭 -->
+        <div id="video-tab-mutant" class="video-tab-content">
+          <div id="mutant-keywords" class="keywords"></div>
+          <div id="mutant-list" class="video-list horizontal-grid">
+            <div class="empty-state">
+              <div class="empty-icon">🚀</div>
+              <p class="muted">채널을 추가하여 영상을 분석해주세요</p>
+            </div>
+          </div>
+          <div id="mutant-pagination" class="pagination"></div>
+        </div>
+
+        <!-- 최신영상 탭 -->
+        <div id="video-tab-latest" class="video-tab-content active">
+          <div id="latest-keywords" class="keywords"></div>
+          <div id="latest-list" class="video-list horizontal-grid">
+            <div class="empty-state">
+              <div class="empty-icon">📱</div>
+              <p class="muted">채널을 추가하여 영상을 분석해주세요</p>
+            </div>
+          </div>
+          <div id="latest-pagination" class="pagination"></div>
+        </div>
       </section>
 
-      <section id="keyword-section" class="col" style="margin-top: 24px;">
-        <h2>키워드 분석</h2>
-        <div id="keyword-list" class="keywords">
-          <p class="muted">키워드가 없습니다.</p>
+      <!-- 대본 작업 파서 -->
+      <section class="section" id="section-scene-parser" data-section="scene-parser" style="display:none;">
+        <div class="section-header">
+          <h2>🖼️ 대본 작업</h2>
+          <div class="section-actions">
+            <input type="date" id="scene-date" class="input-date" />
+            <button id="scene-save" class="btn btn-primary">파일 저장</button>
+            <button id="scene-clear" class="btn btn-secondary">지우기</button>
+          </div>
+        </div>
+
+        <div class="scene-parser-content" style="display:grid; grid-template-columns:1fr 1fr; gap:24px; height:calc(100vh - 200px);">
+          <!-- 입력 -->
+          <div class="scene-input-area" style="display:flex; flex-direction:column;">
+            <label for="scene-input" style="font-weight:600; margin-bottom:8px;">입력 텍스트</label>
+            <textarea id="scene-input"
+              placeholder="[1 ~ 2] 또는 [7] 같은 구간만 있어도 됩니다. 결과에는 따옴표 안의 이미지 프롬프트만 표시됩니다."
+              style="flex:1; resize:none; padding:16px; border-radius:12px; border:2px solid var(--border); background:var(--card); color:var(--text); line-height:1.6; font-size:14px; font-family: ui-sans-serif, system-ui, sans-serif;"></textarea>
+            <div class="help-text">
+              <strong>규칙:</strong> ① '이미지 프롬프트:' 라벨 뒤 첫 따옴표 구절 우선 ② 없다면 블록 내 가장 긴 따옴표 구절을 사용합니다. ③ 따옴표는 제거되어 표시됩니다.
+            </div>
+          </div>
+
+          <!-- 결과 -->
+          <div class="scene-output-area" style="display:flex; flex-direction:column;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+              <label style="font-weight:600;">결과</label>
+              <span style="font-size:12px; color:var(--muted);">이미지 프롬프트</span>
+            </div>
+
+            <div class="table-wrap" style="flex:1; overflow-y:auto; border:2px solid var(--border); border-radius:12px; background:var(--card);">
+              <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                  <tr style="position:sticky; top:0; background:#0f1622;">
+                    <th class="col-scene" style="text-align:left; padding:12px; border-bottom:1px solid var(--border); width:140px; white-space:nowrap;">씬구간</th>
+                    <th class="col-prompt" style="text-align:left; padding:12px; border-bottom:1px solid var(--border);">이미지 프롬프트 (따옴표 안 값만)</th>
+                    <th style="text-align:left; padding:12px; border-bottom:1px solid var(--border); width:100px;">복사</th>
+                  </tr>
+                </thead>
+                <tbody id="scene-tbody">
+                  <tr><td colspan="3" class="empty" style="color:var(--muted); text-align:center; padding:28px;">왼쪽에 입력을 붙여넣으세요.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </section>
-    </div>
+    </main>
   </div>
 
+  <!-- API 키 모달 -->
   <div id="modal-api" class="modal">
-    <div class="content">
-      <span class="close" data-close="modal-api">×</span>
-      <h3>API 키 입력</h3>
-      <p>최대 5개까지 저장하고 자동 순환 사용합니다.</p>
-      <div id="api-inputs" class="api-inputs">
-        <input type="text" id="api-key-1" placeholder="API Key 1"/>
-        <input type="text" id="api-key-2" placeholder="API Key 2"/>
-        <input type="text" id="api-key-3" placeholder="API Key 3"/>
-        <input type="text" id="api-key-4" placeholder="API Key 4"/>
-        <input type="text" id="api-key-5" placeholder="API Key 5"/>
-      </div>
-      <div class="row" style="margin-top:8px">
-        <input type="file" id="api-file" accept=".txt" style="display:none" />
-        <button id="api-file-btn" class="file-label" type="button">API 키 업로드(.txt)</button>
-        <button id="api-save" class="btn" type="button">저장</button>
-        <button id="api-download" class="btn" type="button">다운로드</button>
-        <button id="api-test" class="btn" type="button">API 키 테스트</button>
-      </div>
-      <div id="api-test-result" class="small"></div>
-    </div>
-  </div>
+    <div class="modal-content">
+      <span class="close" data-close="modal-api">&times;</span>
+      <h3>🔑 YouTube API 키 설정</h3>
+      <p class="modal-description">
+        YouTube Data API v3 키를 입력하세요.
+        <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:var(--brand);">Google Cloud Console</a>에서 발급받을 수 있습니다.
+      </p>
 
-  <div id="modal-add" class="modal">
-    <div class="content">
-      <span class="close" data-close="modal-add">×</span>
-      <h3>채널 추가</h3>
-      <div class="tabs">
-        <button class="tab active" data-tab="tab-ch-search">채널명 검색</button>
-        <button class="tab" data-tab="tab-vid-search">영상 검색(롱폼만)</button>
-        <button class="tab" data-tab="tab-url-add">URL 직접 입력</button>
-      </div>
-      <div id="tab-ch-search" class="tabpanel active">
-        <div class="row"><input id="ch-query" class="search-input" placeholder="채널명으로 검색"/><button id="btn-ch-search" class="btn">검색</button><span style="flex:1"></span><label style="font-size:12px">정렬: <select id="ch-sort"><option value="subs" selected>구독자순</option><option value="videos">영상수순</option><option value="latest">최신업로드순</option></select></label></div>
-        <div id="ch-results" class="result-list"></div>
-        <div id="ch-pagination" class="pagination"></div>
-      </div>
-      <div id="tab-vid-search" class="tabpanel">
-        <div class="row"><input id="vid-query" class="search-input" placeholder="검색어 입력(롱폼만 표시)"/><button id="btn-vid-search" class="btn">검색</button></div>
-        <div id="vid-results" class="result-list"></div>
-        <div id="vid-pagination" class="pagination"></div>
-      </div>
-      <div id="tab-url-add" class="tabpanel">
-        <div class="row">
-          <input id="url-input" class="search-input" placeholder="채널 URL 또는 채널 ID 입력"/>
-          <button id="btn-url-add" class="btn">추가</button>
+      <div class="api-input-section">
+        <div id="api-inputs"></div>
+        <div class="api-file-actions" style="display:flex; gap:8px; margin:16px 0; justify-content:center;">
+          <button id="api-export" class="btn btn-secondary">📥 키 내보내기</button>
+          <button id="api-import-btn" class="btn btn-secondary">📤 키 가져오기</button>
+          <input type="file" id="api-import-file" accept=".json,.txt" style="display:none" />
         </div>
-        <div id="url-result"></div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="api-save" class="btn btn-primary">💾 저장</button>
+        <button id="api-test" class="btn btn-secondary">🧪 테스트</button>
+      </div>
+      <div id="api-test-result"></div>
+    </div>
+  </div>
+
+<!-- OAuth 클라이언트 ID 모달 -->
+<div id="modal-oauth" class="modal">
+  <div class="modal-content">
+    <span class="close" data-close="modal-oauth">&times;</span>
+    <h3>🔐 Google OAuth 클라이언트 ID</h3>
+    <p class="modal-description">
+      Google Cloud Console에서 발급한 <b>웹 애플리케이션</b>용 Client ID를 입력하세요.<br>
+      이 값은 <b>이 PC의 IndexedDB</b>에 저장됩니다. (파일로 저장되지 않음)
+    </p>
+
+    <div class="input-group">
+      <input id="oauth-client-id-input" type="text"
+             placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com" />
+    </div>
+
+    <div class="modal-actions">
+      <button id="oauth-client-id-save" class="btn btn-primary">💾 저장</button>
+    </div>
+  </div>
+</div>
+
+  <!-- 채널 추가 모달 -->
+  <div id="modal-add" class="modal">
+    <div class="modal-content modal-large">
+      <span class="close" data-close="modal-add">&times;</span>
+      <h3>📺 채널 추가</h3>
+
+      <div class="add-tabs">
+        <button class="add-tab active" data-add-tab="url">채널명/URL 검색</button>
+      </div>
+
+      <div id="add-tab-url" class="add-tab-content active">
+        <div class="input-group">
+          <input id="url-input" type="text" placeholder="채널명 / @핸들 / 채널 URL / 동영상 URL" />
+          <button id="btn-url-add" class="btn btn-primary">검색/추가</button>
+        </div>
+        <div id="url-result" class="result-list"></div>
       </div>
     </div>
   </div>
 
+  <!-- 분석 모달 -->
   <div id="modal-analyze" class="modal">
-    <div class="content">
-      <span class="close" data-close="modal-analyze">×</span>
-      <h3>분석할 채널 선택</h3>
-      <p class="muted">분석을 원하는 채널을 선택해주세요.</p>
-      <div id="analyze-channel-list" class="result-list"></div>
+    <div class="modal-content">
+      <span class="close" data-close="modal-analyze">&times;</span>
+      <h3>📊 채널 분석</h3>
+      <p class="modal-description">분석할 채널을 선택하세요. 심층 분석에는 시간이 소요될 수 있습니다.</p>
+      <div id="analyze-channel-list" class="analyze-list"></div>
     </div>
   </div>
 
-  <div id="toast" class="toast"></div>
-
+  <!-- 스크립트 -->
   <script src="js/common.js"></script>
-  <script src="js/section1.js"></script>
-  <script src="js/section2.js"></script>
-  <script src="js/section3.js"></script>
+  <script src="js/channels.js"></script>
+  <script src="js/videos.js"></script>
+  <script src="js/main-monitor.js"></script>
+  <script src="js/navigation.js"></script>
+  <script src="js/my-channels.js"></script>
+  <script src="js/oauth-manager.js"></script>
+  <script src="js/scene-parser.js"></script>
+  <script src="js/main.js"></script>
+
+  <script>
+    console.log('스크립트 로딩 상태 확인:', {
+      yt: typeof window.yt,
+      getAllChannels: typeof window.getAllChannels,
+      refreshVideos: typeof window.refreshVideos,
+      extractChannelId: typeof window.extractChannelId,
+      openAnalyzeModal: typeof window.openAnalyzeModal,
+      initializeMyChannels: typeof window.initializeMyChannels,
+      initializeTextSplitter: typeof window.initializeTextSplitter,
+      moment: typeof moment,
+      Chart: typeof Chart,
+      Sortable: typeof Sortable
+    });
+    setTimeout(() => {
+      if (typeof window.diagnoseApp === 'function') window.diagnoseApp();
+    }, 3000);
+  </script>
 </body>
 </html>
