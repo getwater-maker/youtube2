@@ -16,52 +16,37 @@ try {
   console.warn('Moment 설정 경고:', e);
 }
 
-// 전역 설정
-window.CONFIG = {
-  // API
-  API_BASE: 'https://www.googleapis.com/youtube/v3/',
-  MAX_RESULTS: 50,
-  TIMEOUT: 60000, // 60초
-  // UI
-  DEFAULT_THEME: 'dark',
-  PAGINATION: {},
-  // 기능별 기본값
-	MAX_CHANNEL_MONITOR: 10,
-	MAX_VIDEOS_MUTANT: 10,
-	MAX_VIDEOS_LATEST: 10,
-	MUTANT_THRESHOLD: 2.0,
-	MIN_LONGFORM_DURATION: 181  // 롱폼 최소 길이 (초)
-};
-
-// 전역 상태
-window.state = {
-  currentMutantPeriod: '6m',
-  currentLatestPeriod: '1m',
-  currentView: 'home',
-  currentPage: { channels: 1, mutant: 1, latest: 1 }
-};
-
-// API 키 보관
-window.apiKeys = JSON.parse(localStorage.getItem('youtubeApiKeys') || '[]');
-window.keyIdx = 0;
-
-function setApiKeys(keys) {
-  window.apiKeys = (keys || []).filter(Boolean);
-  window.keyIdx = 0;
-  localStorage.setItem('youtubeApiKeys', JSON.stringify(window.apiKeys));
-  console.log('API 키 저장됨:', window.apiKeys.length, '개');
+// 날짜 헬퍼
+function fmtDate(d) {
+  try {
+    if (!d) return '';
+    if (typeof d === 'string' || typeof d === 'number') d = new Date(d);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  } catch (e) {
+    return '';
+  }
 }
-function nextKey() {
-  if (!window.apiKeys || window.apiKeys.length < 2) return;
-  window.keyIdx = (window.keyIdx + 1) % window.apiKeys.length;
-  console.log('다음 API 키로 전환:', window.keyIdx);
+window.fmtDate = fmtDate;
+
+// 간단 로거
+function log(...args) {
+  try { console.log('[YT]', ...args); } catch {}
 }
-function hasKeys() {
-  return Array.isArray(window.apiKeys) && window.apiKeys.length > 0;
+function warn(...args) {
+  try { console.warn('[YT]', ...args); } catch {}
 }
-window.setApiKeys = setApiKeys;
-window.nextKey = nextKey;
-window.hasKeys = hasKeys;
+function error(...args) {
+  try { console.error('[YT]', ...args); } catch {}
+}
+window._log = log;
+window._warn = warn;
+window._error = error;
+
+// 환경 감지
+window.isProd = location.hostname !== 'localhost' && location.hostname !== '127.0.0.1';
 
 // ============================================================================
 // 2) IndexedDB (채널/스냅샷 등)
@@ -72,7 +57,8 @@ function openDB() {
   return new Promise((resolve, reject) => {
     if (window.db) return resolve(window.db);
 
-    const req = indexedDB.open('myChannelDB', 5);
+    // ★ 업그레이드: 버전 5 → 6 (my_channels 스토어 추가를 위해)
+    const req = indexedDB.open('myChannelDB', 6);
 
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
@@ -81,6 +67,11 @@ function openDB() {
       if (!db.objectStoreNames.contains('settings')) {
 		db.createObjectStore('settings', { keyPath: 'key' });
 	  }
+
+      // 사용자 채널 저장용 스토어 (누락 방지)
+      if (!db.objectStoreNames.contains('my_channels')) {
+        db.createObjectStore('my_channels', { keyPath: 'id' });
+      }
 
       if (!db.objectStoreNames.contains('insights')) {
         db.createObjectStore('insights', { keyPath: 'channelId' });
@@ -93,8 +84,14 @@ function openDB() {
       }
     };
 
-    req.onsuccess = (e) => { window.db = e.target.result; resolve(window.db); };
-    req.onerror = (e) => reject(e);
+    req.onsuccess = () => {
+      window.db = req.result;
+      resolve(window.db);
+    };
+    req.onerror = () => reject(req.error);
+    req.onblocked = () => {
+      console.warn('IndexedDB upgrade blocked. 다른 탭을 닫거나 새로고침하세요.');
+    };
   });
 }
 
@@ -103,35 +100,37 @@ function idbAll(store) {
     try {
       const tx = db.transaction(store, 'readonly');
       const s = tx.objectStore(store);
-      const q = s.getAll();
-      q.onsuccess = () => resolve(q.result || []);
-      q.onerror = () => reject(q.error);
+      const req = s.getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
     } catch (e) { reject(e); }
   }));
 }
+
 function idbGet(store, key) {
   return openDB().then(db => new Promise((resolve, reject) => {
     try {
       const tx = db.transaction(store, 'readonly');
       const s = tx.objectStore(store);
-      const q = s.get(key);
-      q.onsuccess = () => resolve(q.result || null);
-      q.onerror = () => reject(q.error);
+      const req = s.get(key);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
     } catch (e) { reject(e); }
   }));
 }
-function idbPut(store, obj) {
+
+function idbPut(store, value) {
   return openDB().then(db => new Promise((resolve, reject) => {
     try {
       const tx = db.transaction(store, 'readwrite');
       const s = tx.objectStore(store);
-      const q = s.put(obj);
-      q.onsuccess = () => resolve();
-      q.onerror = () => reject(q.error);
-      tx.onerror = () => reject(tx.error);
+      const req = s.put(value);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
     } catch (e) { reject(e); }
   }));
 }
+
 function idbDel(store, key) {
   return openDB().then(db => new Promise((resolve, reject) => {
     try {
@@ -151,10 +150,97 @@ window.idbPut = idbPut;
 window.idbDel = idbDel;
 
 // ============================================================================
-// 3) DOM 유틸 / 토스트 / 모달 / 테마 / 드래그
+// 3) 스토리지 헬퍼 (localStorage)
 // ============================================================================
+function saveJSON(key, obj) {
+  try { localStorage.setItem(key, JSON.stringify(obj)); } catch {}
+}
+function loadJSON(key, fallback = null) {
+  try {
+    const v = localStorage.getItem(key);
+    return v ? JSON.parse(v) : fallback;
+  } catch { return fallback; }
+}
+window.saveJSON = saveJSON;
+window.loadJSON = loadJSON;
 
-// 전역 단축 선택자
+// ============================================================================
+// 4) API 키 관리 (YouTube / SerpAPI / OpenAI)
+// ============================================================================
+const KEY_STORE = 'settings';
+const KEY_KEYS = {
+  yt: 'apiKey.youtube',
+  serp: 'apiKey.serp',
+  openai: 'apiKey.openai',
+};
+
+async function getApiKeys() {
+  const [yt, serp, openai] = await Promise.all([
+    idbGet(KEY_STORE, KEY_KEYS.yt),
+    idbGet(KEY_STORE, KEY_KEYS.serp),
+    idbGet(KEY_STORE, KEY_KEYS.openai),
+  ]);
+  return {
+    youtube: yt?.value || '',
+    serpapi: serp?.value || '',
+    openai: openai?.value || '',
+  };
+}
+
+async function setApiKeys({ youtube, serpapi, openai }) {
+  const writes = [];
+  if (typeof youtube === 'string') {
+    writes.push(idbPut(KEY_STORE, { key: KEY_KEYS.yt, value: youtube }));
+  }
+  if (typeof serpapi === 'string') {
+    writes.push(idbPut(KEY_STORE, { key: KEY_KEYS.serp, value: serpapi }));
+  }
+  if (typeof openai === 'string') {
+    writes.push(idbPut(KEY_STORE, { key: KEY_KEYS.openai, value: openai }));
+  }
+  await Promise.all(writes);
+  console.log('API 키 저장 완료');
+}
+
+async function hasKeys(kind) {
+  const keys = await getApiKeys();
+  if (!kind) return !!(keys.youtube || keys.serpapi || keys.openai);
+  if (kind === 'youtube') return !!keys.youtube;
+  if (kind === 'serpapi') return !!keys.serpapi;
+  if (kind === 'openai') return !!keys.openai;
+  return false;
+}
+
+async function nextKey(kind, fallback = '') {
+  const keys = await getApiKeys();
+  if (kind === 'youtube') return keys.youtube || fallback;
+  if (kind === 'serpapi') return keys.serpapi || fallback;
+  if (kind === 'openai') return keys.openai || fallback;
+  return fallback;
+}
+window.getApiKeys = getApiKeys;
+window.setApiKeys = setApiKeys;
+window.nextKey = nextKey;
+window.hasKeys = hasKeys;
+
+// ============================================================================
+// 5) 간단 네트워크/지연 유틸
+// ============================================================================
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+window.sleep = sleep;
+
+async function fetchJSON(url, opts = {}) {
+  const res = await fetch(url, opts);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+window.fetchJSON = fetchJSON;
+
+// ============================================================================
+// 6) DOM/모달/알림
+// ============================================================================
 function qs(selector, scope) {
   return (scope || document).querySelector(selector);
 }
@@ -164,6 +250,42 @@ function qsa(selector, scope) {
 window.qs = qs;
 window.qsa = qsa;
 
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = 'block';
+  document.body.classList.add('modal-open');
+}
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = 'none';
+  document.body.classList.remove('modal-open');
+}
+window.openModal = openModal;
+window.closeModal = closeModal;
+
+function toast(msg, type = 'info', timeout = 2500) {
+  try {
+    let box = document.getElementById('toast-box');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'toast-box';
+      box.style.cssText = 'position:fixed;left:50%;top:20px;transform:translateX(-50%);z-index:9999;';
+      document.body.appendChild(box);
+    }
+    const el = document.createElement('div');
+    el.className = `toast toast-${type}`;
+    el.textContent = msg;
+    box.appendChild(el);
+    setTimeout(() => el.remove(), timeout);
+  } catch {}
+}
+window.toast = toast;
+
+// ============================================================================
+// 7) 포맷팅/숫자
+// ============================================================================
 function fmt(n) {
   if (n === null || n === undefined) return '0';
   const num = parseInt(String(n).replace(/,/g, ''), 10);
@@ -172,329 +294,25 @@ function fmt(n) {
 }
 window.fmt = fmt;
 
-// 텍스트 길이 제한 유틸
-function truncateText(text, maxLength) {
-  if (typeof text !== 'string') return '';
-  return text.length > maxLength ? text.substring(0, maxLength) + '…' : text;
+// ============================================================================
+// 8) URL/쿼리스트링
+// ============================================================================
+function getParam(name, url) {
+  if (!url) url = location.href;
+  name = name.replace(/[[\]]/g, '\\$&');
+  const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)'),
+        results = regex.exec(url);
+  if (!results) return null;
+  if (!results[2]) return '';
+  return decodeURIComponent(results[2].replace(/\+/g, ' '));
 }
-window.truncateText = truncateText;
-
-// ★ 키워드 추출 유틸 (전역)
-function extractKeywords(text) {
-  if (!text || typeof text !== 'string') return [];
-  // 간단한 한국어/영문/숫자 토큰 추출
-  const tokens = text
-    .toLowerCase()
-    .replace(/[^a-z0-9가-힣\s]/g, ' ')
-    .split(/\s+/)
-    .filter(w => w.length > 1);
-
-  // 불용어(간단 버전)
-  const stop = new Set(['the','and','for','with','from','this','that','are','was','were','you','your','video','official','full','live','ep','mv','티저','공식','영상','완전','최신','오늘','어제','보기','무료','채널','영상']);
-  const counted = new Map();
-  for (const t of tokens) {
-    if (stop.has(t)) continue;
-    counted.set(t, (counted.get(t) || 0) + 1);
-  }
-  // 상위 10개만 반환
-  return [...counted.entries()].sort((a,b) => b[1]-a[1]).slice(0,10).map(([w])=>w);
-}
-window.extractKeywords = extractKeywords;
-
-function toast(msg, type = 'info', duration = 3000) {
-  let container = document.getElementById('toast-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'toast-container';
-    container.style.cssText =
-      'position:fixed;left:16px;bottom:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:min(420px,90vw)';
-    document.body.appendChild(container);
-  }
-  const typeCfg = {
-    success: { icon: '✅', color: '#1db954' },
-    error: { icon: '❌', color: '#c4302b' },
-    warning: { icon: '⚠️', color: '#ffa502' },
-    info: { icon: 'ℹ️', color: '#667eea' }
-  };
-  const cfg = typeCfg[type] || typeCfg.info;
-  const el = document.createElement('div');
-  el.className = 'toast-message';
-  el.style.cssText =
-    `display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:10px;background:var(--card);color:var(--text);` +
-    `border-left:6px solid ${cfg.color};box-shadow:0 6px 24px rgba(0,0,0,.25);transform:translateX(-16px);opacity:.98`;
-  el.innerHTML = `<span>${cfg.icon}</span><span style="white-space:pre-line">${msg}</span>`;
-  container.appendChild(el);
-  setTimeout(() => { el.style.transform = 'translateX(0)'; }, 10);
-  const remove = () => { if (el.parentNode) el.parentNode.removeChild(el); };
-  el.onclick = remove;
-  setTimeout(remove, duration);
-}
-window.toast = toast;
-
-// 모달
-function openModal(id) { 
-  const m = qs('#' + id); 
-  if (m) {
-    m.style.display = 'flex';
-    m.classList.add('show'); // 추가
-  }
-}
-function closeModal(id) { 
-  const m = qs('#' + id); 
-  if (m) {
-    m.style.display = 'none'; 
-    m.classList.remove('show'); // 추가
-  }
-}
-window.openModal = openModal;
-window.closeModal = closeModal;
-
-// 테마
-function loadTheme() {
-  const saved = localStorage.getItem('theme') || window.CONFIG.DEFAULT_THEME || 'dark';
-  document.body.classList.remove('dark', 'light');
-  document.body.classList.add(saved);
-  const btn = qs('#btn-toggle-theme');
-  if (btn) btn.textContent = saved === 'dark' ? '라이트 모드' : '다크 모드';
-}
-function toggleTheme() {
-  const next = document.body.classList.contains('dark') ? 'light' : 'dark';
-  localStorage.setItem('theme', next);
-  loadTheme();
-}
-window.loadTheme = loadTheme;
-window.toggleTheme = toggleTheme;
-
-// 컬럼 드래그(헤더 잡고 이동) - 새로운 레이아웃에서는 사용하지 않음
-function initDrag() {
-  // 새로운 섹션 기반 레이아웃에서는 드래그 기능 비활성화
-  console.log('드래그 기능은 새로운 레이아웃에서 비활성화됨');
-}
-window.initDrag = initDrag;
+window.getParam = getParam;
 
 // ============================================================================
-// 4) API 키 모달 (입력칸 생성 + 내보내기/가져오기와 연동)
+// 9) 페이지네이션 유틸 (선택)
 // ============================================================================
-function openApiModal() {
-  try {
-    const wrap = qs('#api-inputs');
-    if (!wrap) { openModal('modal-api'); return; }
-
-    // 입력줄 5개 렌더 (각 줄: input + 상태표시)
-    wrap.innerHTML = '';
-    for (let i = 0; i < 5; i++) {
-      const key = window.apiKeys[i] || '';
-      const row = document.createElement('div');
-      row.className = 'api-row';
-      row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:10px;';
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.className = 'api-inp';
-      input.placeholder = `API Key ${i + 1}`;
-      input.value = key;
-      input.style.cssText =
-        'flex:1;padding:12px 14px;border:2px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);' +
-        'font-family:Menlo,monospace;font-size:13px;';
-      const status = document.createElement('span');
-      status.className = 'api-status';
-      status.style.cssText = 'min-width:120px;text-align:right;font-size:12px;opacity:.85;';
-      row.appendChild(input);
-      row.appendChild(status);
-      wrap.appendChild(row);
-    }
-
-    const result = qs('#api-test-result');
-    if (result) result.innerHTML = '';
-
-    openModal('modal-api');
-  } catch (e) {
-    console.error('API 모달 렌더 오류:', e);
-    openModal('modal-api');
-  }
-}
-window.openApiModal = openApiModal;
-
-// ============================================================================
-// 5) YouTube API 호출 유틸
-// ============================================================================
-async function yt(endpoint, params, attempt = 0) {
-  if (!hasKeys()) throw new Error('API 키가 설정되지 않았습니다.');
-  const ctrl = new AbortController();
-  const timeout = setTimeout(() => ctrl.abort(), window.CONFIG.TIMEOUT || 60000);
-
-  const p = new URLSearchParams(params || {});
-  p.set('key', window.apiKeys[window.keyIdx] || '');
-
-  const url = window.CONFIG.API_BASE + endpoint + '?' + p.toString();
-
-  try {
-    const res = await fetch(url, { signal: ctrl.signal });
-    const data = await res.json();
-    clearTimeout(timeout);
-
-    if (data && data.error) {
-      // 쿼터/권한 오류 등
-      if (attempt < (window.apiKeys.length - 1)) {
-        window.nextKey();
-        return yt(endpoint, params, attempt + 1);
-      }
-      const msg = (data.error.message || 'API 오류') + (data.error.code ? ` (code ${data.error.code})` : '');
-      throw new Error(msg);
-    }
-    return data;
-  } catch (e) {
-    clearTimeout(timeout);
-    if (attempt < (window.apiKeys.length - 1)) {
-      window.nextKey();
-      return yt(endpoint, params, attempt + 1);
-    }
-    throw e;
-  }
-}
-window.yt = yt;
-
-// ISO8601 PT#H#M#S → seconds
-function seconds(iso) {
-  try { return Math.round(moment.duration(iso).asSeconds()); }
-  catch { return 0; }
-}
-window.seconds = seconds;
-
-// ============================================================================
-// 6) 채널 ID 추출 유틸
-// ============================================================================
-async function extractChannelId(input) {
-  const trimmed = input.trim();
-  
-  // 이미 채널 ID 형태인 경우 (UC로 시작하는 22자리)
-  if (/^UC[A-Za-z0-9_-]{22}$/.test(trimmed)) {
-    return trimmed;
-  }
-  
-  // @핸들 형태인 경우
-  if (trimmed.startsWith('@')) {
-    try {
-      const handle = trimmed.slice(1);
-      const searchRes = await yt('search', {
-        part: 'snippet',
-        type: 'channel',
-        q: handle,
-        maxResults: 1
-      });
-      
-      if (searchRes.items && searchRes.items[0]) {
-        return searchRes.items[0].id.channelId;
-      }
-    } catch (e) {
-      console.error('핸들 검색 실패:', e);
-    }
-    throw new Error('핸들을 통한 채널을 찾을 수 없습니다.');
-  }
-  
-  // URL 형태인 경우
-  if (trimmed.includes('youtube.com') || trimmed.includes('youtu.be')) {
-    // 채널 URL 패턴들
-    const patterns = [
-      /youtube\.com\/channel\/([a-zA-Z0-9_-]+)/,
-      /youtube\.com\/c\/([a-zA-Z0-9_-]+)/,
-      /youtube\.com\/user\/([a-zA-Z0-9_-]+)/,
-      /youtube\.com\/@([a-zA-Z0-9_-]+)/,
-      /youtube\.com\/([a-zA-Z0-9_-]+)$/
-    ];
-    
-    for (const pattern of patterns) {
-      const match = trimmed.match(pattern);
-      if (match) {
-        const identifier = match[1];
-        
-        // 이미 채널 ID 형태라면 바로 반환
-        if (/^UC[A-Za-z0-9_-]{22}$/.test(identifier)) {
-          return identifier;
-        }
-        
-        // @ 핸들인 경우
-        if (trimmed.includes('@')) {
-          try {
-            const searchRes = await yt('search', {
-              part: 'snippet',
-              type: 'channel',
-              q: identifier,
-              maxResults: 1
-            });
-            
-            if (searchRes.items && searchRes.items[0]) {
-              return searchRes.items[0].id.channelId;
-            }
-          } catch (e) {
-            console.error('핸들 검색 실패:', e);
-          }
-        }
-        
-        // 사용자명이나 커스텀 URL인 경우, 검색으로 시도
-        try {
-          const searchRes = await yt('search', {
-            part: 'snippet',
-            type: 'channel',
-            q: identifier,
-            maxResults: 1
-          });
-          
-          if (searchRes.items && searchRes.items[0]) {
-            return searchRes.items[0].id.channelId;
-          }
-        } catch (e) {
-          console.error('채널 검색 실패:', e);
-        }
-        break;
-      }
-    }
-    
-    // 비디오 URL에서 채널 추출
-    const videoIdMatch = trimmed.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/);
-    if (videoIdMatch) {
-      try {
-        const videoId = videoIdMatch[1];
-        const videoRes = await yt('videos', {
-          part: 'snippet',
-          id: videoId
-        });
-        
-        if (videoRes.items && videoRes.items[0]) {
-          return videoRes.items[0].snippet.channelId;
-        }
-      } catch (e) {
-        console.error('비디오에서 채널 추출 실패:', e);
-      }
-    }
-  }
-  
-  // 일반 텍스트인 경우 검색으로 시도
-  try {
-    const searchRes = await yt('search', {
-      part: 'snippet',
-      type: 'channel',
-      q: trimmed,
-      maxResults: 1
-    });
-    
-    if (searchRes.items && searchRes.items[0]) {
-      return searchRes.items[0].id.channelId;
-    }
-  } catch (e) {
-    console.error('일반 검색 실패:', e);
-  }
-  
-  throw new Error('채널을 찾을 수 없습니다.');
-}
-window.extractChannelId = extractChannelId;
-
-// 섹션별 간단 페이지네이션 렌더
-function renderPagination({ containerId, total, page, size, onChange }) {
-  const el = qs('#' + containerId);
+function renderPager(el, page, pages, onChange) {
   if (!el) return;
-  const pages = Math.max(1, Math.ceil(total / size));
-  if (pages <= 1) { el.innerHTML = ''; return; }
-
   const btn = (p, label = p, disabled = false, active = false) =>
     `<button class="btn btn-secondary ${active ? 'active' : ''}" data-page="${p}" ${disabled ? 'disabled' : ''} style="min-width:36px;">${label}</button>`;
 
@@ -513,9 +331,30 @@ function renderPagination({ containerId, total, page, size, onChange }) {
     });
   });
 }
-window.renderPagination = renderPagination;
+window.renderPager = renderPager;
 
-// 홈 화면으로 복귀(분석 화면 닫기)
+// ============================================================================
+// 10) 간단 로딩 인디케이터
+// ============================================================================
+function setLoading(el, isLoading, text = '로딩중...') {
+  if (!el) return;
+  if (isLoading) {
+    el.setAttribute('data-loading', '1');
+    const overlay = document.createElement('div');
+    overlay.className = 'loading-overlay';
+    overlay.innerHTML = `<div class="spinner"></div><div class="loading-text">${text}</div>`;
+    el.appendChild(overlay);
+  } else {
+    el.removeAttribute('data-loading');
+    const overlay = el.querySelector('.loading-overlay');
+    if (overlay) overlay.remove();
+  }
+}
+window.setLoading = setLoading;
+
+// ============================================================================
+// 11) 홈으로 복귀 (모달 닫고 메인 보여주기)
+// ============================================================================
 function showHome() {
   const analysis = qs('#analysis-section');
   if (analysis) analysis.remove();
