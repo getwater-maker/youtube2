@@ -1,4 +1,7 @@
-// my-channels.js — "내 채널들" 통합 보드 (OAuth + 영상 관리 + 채널 관리)
+// my-channels.js — "내 채널들" 통합 보드 (내 채널/구독 + 등록 채널 관리)
+// - OAuth(팝업) 로그인 상태 표시/갱신
+// - 등록 채널 관리(추가/삭제/정렬/검색/가져오기/내보내기)
+// - "내 영상 관리" 섹션/버튼 연동
 console.log('my-channels.js (통합 보드) 로딩');
 
 (function(){
@@ -12,11 +15,6 @@ console.log('my-channels.js (통합 보드) 로딩');
     return isNaN(v) ? '0' : v.toLocaleString('ko-KR');
   };
   const toast = (m,t) => { try{ window.toast(m,t||'info'); }catch{ alert(m); } };
-  
-  // ===== 상태 관리 =====
-  let videosCache = []; // 불러온 영상 목록
-  let myChannelsData = []; // 내 채널 데이터
-  let subscriptionsData = []; // 구독 채널 데이터
 
   // ===== OAuth 연동 (oauth-manager.js 의 전역 함수 사용) =====
   function reflectLoginStatus() {
@@ -27,10 +25,6 @@ console.log('my-channels.js (통합 보드) 로딩');
     if (btnSignout) btnSignout.style.display = token ? '' : 'none';
     const status = $('#mych-status');
     if (status) status.textContent = token ? '로그인됨' : '로그인 필요';
-    
-    // 영상 관리 섹션 표시/숨김
-    const videoSection = $('#video-management-section');
-    if (videoSection) videoSection.style.display = token ? 'block' : 'none';
   }
 
   async function initOAuthButtons(){
@@ -41,10 +35,9 @@ console.log('my-channels.js (통합 보드) 로딩');
       signIn.dataset.bound='1';
       signIn.addEventListener('click', async () => {
         try {
-          await window.oauthSignIn?.('consent');
+          await window.oauthSignIn?.('consent'); // oauth-manager.js
           reflectLoginStatus();
           await loadMyChannelAndSubs();
-          initializeDateInputs();
         } catch(e) {
           console.error(e);
           toast('로그인 실패', 'error');
@@ -56,33 +49,46 @@ console.log('my-channels.js (통합 보드) 로딩');
       signOut.addEventListener('click', async () => {
         try {
           window.oauthSignOut?.();
+        } finally {
           reflectLoginStatus();
-          clearAllData();
-        } catch(e) {
-          console.error(e);
-          toast('로그아웃 실패', 'error');
+          clearOwnLists();
         }
       });
     }
+
+    // 최초 상태 반영
+    reflectLoginStatus();
   }
 
-  // ===== 내 채널/구독 데이터 로드 =====
+  // ===== 내 채널/구독 영역 =====
+  function clearOwnLists(){
+    const own = $('#my-channels-list'); if (own) own.innerHTML='';
+    const subs= $('#my-subscriptions-list'); if (subs) subs.innerHTML='';
+  }
+
   async function fetchMyChannel(){
-    const res = await window.ytAuth('channels', {part:'snippet,statistics,contentDetails', mine:true});
-    return (res.items||[]).map(ch=>({
-      id: ch.id,
-      title: ch.snippet?.title || '(제목 없음)',
-      thumbnail: ch.snippet?.thumbnails?.high?.url || ch.snippet?.thumbnails?.default?.url || '',
-      subscriberCount: parseInt(ch.statistics?.subscriberCount || '0',10),
-      videoCount: parseInt(ch.statistics?.videoCount || '0',10),
-      uploadsPlaylistId: ch.contentDetails?.relatedPlaylists?.uploads
-    }));
+    const j = await window.ytAuth('channels', {
+      part: 'snippet,contentDetails,statistics',
+      mine: true,
+      maxResults: 50
+    });
+    const out=[];
+    (j.items||[]).forEach(it=>{
+      const uploads = it.contentDetails?.relatedPlaylists?.uploads || '';
+      out.push({
+        id: it.id,
+        title: it.snippet?.title || '(제목 없음)',
+        thumbnail: it.snippet?.thumbnails?.high?.url || it.snippet?.thumbnails?.medium?.url || it.snippet?.thumbnails?.default?.url || 'https://yt3.ggpht.com/a/default-user=s88-c-k-c0x00ffffff-no-rj',
+        subscriberCount: parseInt(it.statistics?.subscriberCount || '0',10),
+        videoCount: parseInt(it.statistics?.videoCount || '0',10),
+        uploadsPlaylistId: uploads
+      });
+    });
+    return out;
   }
-
   async function fetchMySubscriptions(){
-    let ids = [];
-    let pageToken = null;
-    for(let i=0; i<10; i++){
+    const ids=[]; let pageToken;
+    while(true){
       const s = await window.ytAuth('subscriptions', {
         part:'snippet', mine:true, maxResults:50, ...(pageToken?{pageToken}:{})
       });
@@ -104,7 +110,7 @@ console.log('my-channels.js (통합 보드) 로딩');
         out.push({
           id: ch.id,
           title: ch.snippet?.title || '(제목 없음)',
-          thumbnail: ch.snippet?.thumbnails?.high?.url || ch.snippet?.thumbnails?.default?.url || '',
+          thumbnail: ch.snippet?.thumbnails?.high?.url || ch.snippet?.thumbnails?.default?.url || 'https://yt3.ggpht.com/a/default-user=s88-c-k-c0x00ffffff-no-rj',
           subscriberCount: parseInt(ch.statistics?.subscriberCount || '0',10)
         });
       });
@@ -112,12 +118,8 @@ console.log('my-channels.js (통합 보드) 로딩');
     return out;
   }
 
-  function renderMyChannels(list){
-    const wrap = $('#my-channels-list'); 
-    if (!wrap) return;
-    
-    myChannelsData = list;
-    
+  function renderOwn(list){
+    const wrap = $('#my-channels-list'); if (!wrap) return;
     if (!list.length){
       wrap.innerHTML = `
         <div class="empty-state">
@@ -126,12 +128,10 @@ console.log('my-channels.js (통합 보드) 로딩');
         </div>`;
       return;
     }
-    
     wrap.innerHTML = `
       <div class="section-header" style="border-bottom:none;padding-bottom:0;margin-bottom:8px;">
-        <h4 style="margin:0;">내 채널 (${list.length}개)</h4>
+        <h4 style="margin:0;">내 채널</h4>
       </div>`;
-      
     const grid = document.createElement('div');
     grid.className = 'channel-list horizontal-grid';
     list.forEach(ch=>{
@@ -149,32 +149,24 @@ console.log('my-channels.js (통합 보드) 로딩');
         </div>
         <div class="channel-actions">
           <a class="btn btn-secondary" href="https://www.youtube.com/channel/${ch.id}" target="_blank">채널 열기</a>
-          <button class="btn btn-primary" onclick="loadChannelVideos('${ch.id}')">영상 불러오기</button>
         </div>`;
       grid.appendChild(el);
     });
     wrap.appendChild(grid);
   }
-
-  function renderSubscriptions(list){
-    const wrap = $('#my-subscriptions-list'); 
-    if (!wrap) return;
-    
-    subscriptionsData = list;
-    
+  function renderSubs(list){
+    const wrap = $('#my-subscriptions-list'); if (!wrap) return;
     if (!list.length){
       wrap.innerHTML = '';
       return;
     }
-    
     wrap.innerHTML = `
       <div class="section-header" style="border-bottom:none;padding-bottom:0;margin-bottom:8px;">
         <h4 style="margin:0;">내 구독 (${list.length}개)</h4>
       </div>`;
-      
     const grid = document.createElement('div');
     grid.className = 'channel-list horizontal-grid';
-    list.slice(0, 10).forEach(ch=>{ // 상위 10개만 표시
+    list.forEach(ch=>{
       const el = document.createElement('div');
       el.className = 'channel-card';
       el.innerHTML = `
@@ -195,19 +187,14 @@ console.log('my-channels.js (통합 보드) 로딩');
 
   async function loadMyChannelAndSubs(){
     const token = (window.getAccessToken && window.getAccessToken()) || null;
-    if (!token){ 
-      renderMyChannels([]);
-      renderSubscriptions([]);
-      return; 
-    }
-    
+    if (!token){ clearOwnLists(); return; }
     try{
       $('#mych-status') && ($('#mych-status').textContent = '불러오는 중…');
       const [mine, subs] = await Promise.allSettled([fetchMyChannel(), fetchMySubscriptions()]);
       const mineList = mine.status==='fulfilled'? (mine.value||[]) : [];
       const subsList = subs.status==='fulfilled'? (subs.value||[]) : [];
-      renderMyChannels(mineList);
-      renderSubscriptions(subsList);
+      renderOwn(mineList);
+      renderSubs(subsList);
       reflectLoginStatus();
     }catch(e){
       console.error(e);
@@ -215,369 +202,202 @@ console.log('my-channels.js (통합 보드) 로딩');
     }
   }
 
-  // ===== 영상 관리 기능 =====
-  function initializeDateInputs() {
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    
-    const startInput = $('#video-date-start');
-    const endInput = $('#video-date-end');
-    
-    if (endInput && !endInput.value) endInput.value = `${yyyy}-${mm}-${dd}`;
-    if (startInput && !startInput.value) startInput.value = `${yyyy}-${mm}-01`;
-  }
+  // ===== 등록 채널 관리 보드 =====
+  const MC_PAGE_SIZE = 12;
+  let mcState = {
+    sort: 'subscribers',
+    search: '',
+    page: 1,
+    list: []
+  };
 
-  async function fetchMyVideosByDate(publishedAfter, publishedBefore, pageToken = null) {
-    // 내 영상 검색
-    const searchResp = await window.ytAuth('search', {
-      part: 'id',
-      forMine: true,
-      type: 'video',
-      maxResults: 50,
-      order: 'date',
-      publishedAfter: publishedAfter,
-      publishedBefore: publishedBefore,
-      ...(pageToken ? {pageToken} : {})
-    });
-
-    const videoIds = (searchResp.items || [])
-      .map(item => item.id?.videoId)
-      .filter(Boolean);
-
-    if (videoIds.length === 0) {
-      return { videos: [], nextPageToken: searchResp.nextPageToken || null };
+  function sortChannels(list, mode){
+    if (mode === 'videos') {
+      list.sort((a,b)=>parseInt(b.videoCount||'0')-parseInt(a.videoCount||'0'));
+    } else if (mode === 'latest') {
+      list.sort((a,b)=>new Date(b.latestUploadDate||0)-new Date(a.latestUploadDate||0));
+    } else {
+      list.sort((a,b)=>parseInt(b.subscriberCount||'0')-parseInt(a.subscriberCount||'0'));
     }
-
-    // 영상 상세 정보
-    const detailResp = await window.ytAuth('videos', {
-      part: 'snippet,statistics',
-      id: videoIds.join(','),
-      maxResults: 50
-    });
-
-    const videos = (detailResp.items || []).map(video => ({
-      id: video.id,
-      snippet: video.snippet,
-      statistics: video.statistics || {},
-      thumbnail: video.snippet?.thumbnails?.medium?.url || 
-                video.snippet?.thumbnails?.default?.url || ''
-    }));
-
-    return { videos, nextPageToken: searchResp.nextPageToken || null };
   }
 
-  function renderVideoList(videos) {
-    const tbody = $('#video-table-body');
-    if (!tbody) return;
-    
-    if (!videos.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center muted">영상이 없습니다.</td></tr>';
+  async function mcLoadAll(){
+    try{
+      const all = await idbAll('my_channels');
+      mcState.list = all;
+      mcRender();
+    }catch(e){
+      console.error(e);
+      toast('등록 채널 목록을 불러올 수 없습니다.', 'error');
+    }
+  }
+
+  function mcRender(){
+    const wrap = $('#mc-channel-list'); if (!wrap) return;
+    const cnt  = $('#mc-channel-count');
+
+    // 검색/정렬/페이지
+    const q = (mcState.search||'').toLowerCase().trim();
+    let arr = [...mcState.list];
+    if (q) arr = arr.filter(ch => (ch.title||'').toLowerCase().includes(q));
+    sortChannels(arr, mcState.sort);
+
+    // 카운트
+    if (cnt) cnt.textContent = String(arr.length);
+
+    // 페이징
+    const start = (mcState.page-1)*MC_PAGE_SIZE;
+    const pageItems = arr.slice(start, start+MC_PAGE_SIZE);
+
+    if (!arr.length){
+      wrap.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">📺</div>
+          <p class="muted">아직 등록된 채널이 없습니다.</p>
+          <button class="btn btn-primary" onclick="document.getElementById('mc-btn-add').click()">첫 채널 추가하기</button>
+        </div>`;
+      $('#mc-pagination') && ($('#mc-pagination').innerHTML='');
       return;
     }
-    
-    tbody.innerHTML = '';
-    videos.forEach(video => {
-      const tr = document.createElement('tr');
-      const views = parseInt(video.statistics?.viewCount || 0);
-      const publishedAt = new Date(video.snippet?.publishedAt);
-      
-      tr.innerHTML = `
-        <td><input type="checkbox" class="video-checkbox" data-video-id="${video.id}" /></td>
-        <td>
-          <img src="${video.thumbnail}" alt="썸네일" style="width: 120px; height: 68px; object-fit: cover; border-radius: 8px;" />
-        </td>
-        <td>
-          <div style="max-width: 300px;">
-            <strong>${escapeHtml(video.snippet?.title || '')}</strong>
-            <div class="muted" style="font-size: 12px; margin-top: 4px;">
-              ${escapeHtml((video.snippet?.description || '').slice(0, 100))}${video.snippet?.description?.length > 100 ? '...' : ''}
-            </div>
-            <div class="muted" style="font-size: 11px; margin-top: 4px;">
-              태그: ${Array.isArray(video.snippet?.tags) ? video.snippet.tags.slice(0, 3).join(', ') : '없음'}
-            </div>
+
+    // 리스트
+    const html = pageItems.map(ch=>{
+      const yesterday = ''; // 간단화: 필요 시 dailySubs 사용 가능
+      const thumb = (ch.thumbnail||'').trim() || `https://yt3.ggpht.com/ytc/${ch.id}`;
+      return `
+      <div class="channel-card" data-id="${ch.id}">
+        <img class="channel-thumb" src="${thumb}" alt="${ch.title}">
+        <div class="channel-meta">
+          <h3><a href="https://www.youtube.com/channel/${ch.id}" target="_blank">${ch.title}</a></h3>
+          <div class="row">
+            <span>구독자 <strong>${fmt(ch.subscriberCount)}</strong></span>
+            <span>영상 <strong>${fmt(ch.videoCount)}</strong></span>
+            <span>최근업로드 <strong>${(ch.latestUploadDate||'-').toString().slice(0,10)}</strong></span>
           </div>
-        </td>
-        <td>${fmt(views)}</td>
-        <td>${publishedAt.toLocaleDateString()}</td>
-        <td>
-          <div style="display: flex; gap: 4px; flex-direction: column;">
-            <button class="btn btn-sm btn-primary" onclick="quickTitleEdit('${video.id}')">빠른 제목 수정</button>
-            <button class="btn btn-sm btn-secondary" onclick="editVideoDetails('${video.id}')">상세 수정</button>
-            <a href="https://www.youtube.com/watch?v=${video.id}" target="_blank" class="btn btn-sm btn-info">보기</a>
-          </div>
-        </td>
-      `;
-      tbody.appendChild(tr);
+          <div class="latest">${yesterday || ''}</div>
+        </div>
+        <div class="channel-actions">
+          <button class="btn btn-secondary" data-open-ch="${ch.id}">채널 열기</button>
+          <button class="btn btn-danger" data-del-ch="${ch.id}">삭제</button>
+        </div>
+      </div>`;
+    }).join('');
+    wrap.innerHTML = html;
+
+    // 버튼 바인딩
+    $$('#mc-channel-list [data-open-ch]').forEach(btn=>{
+      btn.onclick = ()=> window.open(`https://www.youtube.com/channel/${btn.dataset.openCh}`, '_blank');
     });
-  }
-
-  function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
-  // ===== 제목 프리셋 관리 =====
-  function initializePresetSystem() {
-    if (window.TitlePresets) {
-      window.TitlePresets.renderPresetUI();
-    }
-    
-    const saveBtn = $('#btn-save-presets');
-    const clearBtn = $('#btn-clear-presets');
-    const input = $('#preset-input');
-    
-    if (saveBtn && !saveBtn.dataset.bound) {
-      saveBtn.dataset.bound = '1';
-      saveBtn.onclick = () => {
-        if (!window.TitlePresets) return;
-        const raw = (input?.value || '').split('\n');
-        const saved = window.TitlePresets.savePresets(raw);
-        window.TitlePresets.renderPresetUI();
-        toast(`프리셋 ${saved.length}개 저장됨`, 'success');
+    $$('#mc-channel-list [data-del-ch]').forEach(btn=>{
+      btn.onclick = async ()=>{
+        if (!confirm('이 채널을 삭제할까요?')) return;
+        try{
+          await idbDel('my_channels', btn.dataset.delCh);
+          toast('삭제되었습니다.', 'success');
+        }catch(e){ console.error(e); toast('삭제 실패', 'error'); }
+        mcLoadAll();
       };
-    }
-    
-    if (clearBtn && !clearBtn.dataset.bound) {
-      clearBtn.dataset.bound = '1';
-      clearBtn.onclick = () => {
-        if (!window.TitlePresets) return;
-        window.TitlePresets.clearPresets();
-        window.TitlePresets.renderPresetUI();
-        if (input) input.value = '';
-        toast('프리셋을 모두 삭제했습니다.', 'warning');
-      };
+    });
+
+    // 페이지네이션(간단)
+    const totalPages = Math.max(1, Math.ceil(arr.length/MC_PAGE_SIZE));
+    const p = $('#mc-pagination');
+    if (p){
+      let pg = '';
+      for (let i=1;i<=totalPages;i++){
+        pg += `<button class="btn btn-secondary" data-mc-page="${i}" style="margin-right:6px;${i===mcState.page?'background:var(--border);':''}">${i}</button>`;
+      }
+      p.innerHTML = pg;
+      $$('#mc-pagination [data-mc-page]').forEach(b=>{
+        b.onclick = ()=>{ mcState.page = parseInt(b.dataset.mcPage,10); mcRender(); };
+      });
     }
   }
 
-  // ===== 이벤트 바인딩 =====
-  function bindVideoManagementEvents() {
-    // 영상 불러오기 버튼
-    const fetchBtn = $('#btn-fetch-videos');
-    if (fetchBtn && !fetchBtn.dataset.bound) {
-      fetchBtn.dataset.bound = '1';
-      fetchBtn.onclick = fetchVideosFlow;
-    }
-    
-    // 일괄 제목 수정 버튼
-    const bulkBtn = $('#btn-bulk-title-edit');
-    if (bulkBtn && !bulkBtn.dataset.bound) {
-      bulkBtn.dataset.bound = '1';
-      bulkBtn.onclick = bulkTitleEditFlow;
-    }
-    
-    // 전체 선택 체크박스
-    const selectAllBtn = $('#select-all-videos');
-    if (selectAllBtn && !selectAllBtn.dataset.bound) {
-      selectAllBtn.dataset.bound = '1';
-      selectAllBtn.onchange = (e) => {
-        const checkboxes = $$('.video-checkbox');
-        checkboxes.forEach(cb => cb.checked = e.target.checked);
-      };
-    }
+  function bindManageBoard(){
+    const addBtn = $('#mc-btn-add');
+    const expBtn = $('#mc-btn-export');
+    const impBtn = $('#mc-btn-import');
+    const impFile= $('#mc-file-import');
+    const sortSel= $('#mc-sort');
+    const search = $('#mc-search');
+
+    addBtn && (addBtn.onclick = async ()=>{
+      const channelId = prompt('추가할 채널 ID를 입력하세요 (예: UCxxxx...)');
+      if (!channelId) return;
+      try{
+        // channels.js의 addChannelById 있으면 사용, 없으면 간단 실패 안내
+        if (typeof window.addChannelById === 'function'){
+          const ok = await window.addChannelById(channelId.trim());
+          if (ok) mcLoadAll();
+        }else{
+          toast('addChannelById 함수를 찾을 수 없습니다. channels.js를 확인하세요.', 'error');
+        }
+      }catch(e){ console.error(e); toast('채널 추가 실패', 'error'); }
+    });
+
+    expBtn && (expBtn.onclick = async ()=>{
+      try{
+        const all = await idbAll('my_channels');
+        const blob = new Blob([JSON.stringify(all, null, 2)], { type: 'application/json;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `channels-export-${new Date().toISOString().slice(0,10)}.json`;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(a.href);
+        toast('내보내기 완료', 'success');
+      }catch(e){ console.error(e); toast('내보내기 실패', 'error'); }
+    });
+
+    impBtn && (impBtn.onclick = ()=> impFile && impFile.click());
+    impFile && (impFile.onchange = async (ev)=>{
+      const f = ev.target.files?.[0];
+      if (!f) return;
+      try{
+        const text = await f.text();
+        const arr = JSON.parse(text);
+        if (!Array.isArray(arr)) throw new Error('JSON 배열이 아닙니다.');
+        for (const ch of arr) { await idbPut('my_channels', ch); }
+        toast(`가져오기 완료 (${arr.length}개)`, 'success');
+        mcLoadAll();
+      }catch(e){ console.error(e); toast('가져오기 실패: '+e.message, 'error'); }
+      ev.target.value = '';
+    });
+
+    sortSel && (sortSel.onchange = ()=>{ mcState.sort = sortSel.value; mcState.page=1; mcRender(); });
+    search && (search.oninput  = ()=>{ mcState.search = search.value; mcState.page=1; mcRender(); });
   }
 
-  async function fetchVideosFlow() {
-    try {
-      const startDate = $('#video-date-start')?.value;
-      const endDate = $('#video-date-end')?.value;
-      const minViews = parseInt($('#video-min-views')?.value || '0');
-      
-      if (!startDate || !endDate) {
-        toast('시작일과 종료일을 선택해주세요.', 'warning');
-        return;
-      }
-      
-      $('#video-status').textContent = '영상을 불러오는 중...';
-      
-      const startISO = new Date(`${startDate}T00:00:00Z`).toISOString();
-      const endISO = new Date(`${endDate}T23:59:59Z`).toISOString();
-      
-      let allVideos = [];
-      let pageToken = null;
-      
-      do {
-        const { videos, nextPageToken } = await fetchMyVideosByDate(startISO, endISO, pageToken);
-        allVideos = allVideos.concat(videos);
-        pageToken = nextPageToken;
-      } while (pageToken && allVideos.length < 200); // 최대 200개 제한
-      
-      // 조회수 필터링
-      if (minViews > 0) {
-        allVideos = allVideos.filter(v => parseInt(v.statistics?.viewCount || 0) >= minViews);
-      }
-      
-      // 정렬
-      const sortType = $('#video-sort')?.value || 'date';
-      if (sortType === 'views') {
-        allVideos.sort((a, b) => parseInt(b.statistics?.viewCount || 0) - parseInt(a.statistics?.viewCount || 0));
-      } else if (sortType === 'title') {
-        allVideos.sort((a, b) => (a.snippet?.title || '').localeCompare(b.snippet?.title || ''));
-      }
-      
-      videosCache = allVideos;
-      renderVideoList(allVideos);
-      
-      $('#video-status').textContent = `총 ${allVideos.length}개의 영상을 불러왔습니다.`;
-      toast(`${allVideos.length}개의 영상을 불러왔습니다.`, 'success');
-      
-    } catch (error) {
-      console.error('영상 불러오기 실패:', error);
-      $('#video-status').textContent = '영상 불러오기 실패';
-      toast('영상을 불러오는 중 오류가 발생했습니다.', 'error');
-    }
-  }
-
-  async function bulkTitleEditFlow() {
-    const checkedBoxes = $$('.video-checkbox:checked');
-    
-    if (checkedBoxes.length === 0) {
-      toast('수정할 영상을 선택해주세요.', 'warning');
-      return;
-    }
-    
-    if (!window.TitlePresets) {
-      toast('제목 프리셋 시스템을 찾을 수 없습니다.', 'error');
-      return;
-    }
-    
-    const presets = window.TitlePresets.loadPresets();
-    if (presets.length === 0) {
-      toast('먼저 제목 프리셋을 저장해주세요.', 'warning');
-      return;
-    }
-    
-    if (!confirm(`선택된 ${checkedBoxes.length}개 영상의 제목을 프리셋으로 변경하시겠습니까?`)) {
-      return;
-    }
-    
-    $('#video-status').textContent = `제목 변경 중... (${checkedBoxes.length}개)`;
-    
-    let successCount = 0;
-    for (const checkbox of checkedBoxes) {
-      const videoId = checkbox.dataset.videoId;
-      const video = videosCache.find(v => v.id === videoId);
-      if (!video) continue;
-      
-      const newTitle = window.TitlePresets.nextPreset(presets);
-      if (!newTitle) break;
-      
-      try {
-        await updateVideoTitle(videoId, newTitle, video.snippet);
-        // 캐시 업데이트
-        video.snippet.title = newTitle;
-        successCount++;
-      } catch (error) {
-        console.error(`영상 ${videoId} 제목 변경 실패:`, error);
-      }
-    }
-    
-    renderVideoList(videosCache);
-    $('#video-status').textContent = `제목 변경 완료: ${successCount}/${checkedBoxes.length}개 성공`;
-    toast(`${successCount}개 영상의 제목이 변경되었습니다.`, 'success');
-  }
-
-  async function updateVideoTitle(videoId, newTitle, currentSnippet) {
-    const payload = {
-      id: videoId,
-      snippet: {
-        ...currentSnippet,
-        title: newTitle,
-        categoryId: currentSnippet.categoryId || '22'
+  // ===== “내 영상 관리 열기” 버튼 =====
+  function bindOpenVideoManager(){
+    const btn = $('#btn-open-video-manager');
+    if (!btn || btn.dataset.bound==='1') return;
+    btn.dataset.bound='1';
+    btn.onclick = ()=>{
+      // 섹션이 있으면 이동 (section-video-manager), 없으면 영상분석 탭으로 이동
+      if (typeof window.showSection === 'function'){
+        const target = document.getElementById('section-video-manager') ? 'video-manager' : 'videos';
+        window.showSection(target);
+      }else{
+        toast('내 영상 관리/영상분석 섹션을 찾을 수 없습니다.', 'warning');
       }
     };
-    
-    return await window.ytAuth('videos', payload, 'PUT', 'snippet');
   }
-
-  // ===== 전역 함수들 =====
-  window.quickTitleEdit = async function(videoId) {
-    const video = videosCache.find(v => v.id === videoId);
-    if (!video) return;
-    
-    if (!window.TitlePresets) {
-      toast('제목 프리셋 시스템을 찾을 수 없습니다.', 'error');
-      return;
-    }
-    
-    const presets = window.TitlePresets.loadPresets();
-    const nextTitle = window.TitlePresets.nextPreset(presets);
-    
-    if (!nextTitle) {
-      toast('먼저 제목 프리셋을 저장해주세요.', 'warning');
-      return;
-    }
-    
-    try {
-      await updateVideoTitle(videoId, nextTitle, video.snippet);
-      video.snippet.title = nextTitle;
-      renderVideoList(videosCache);
-      toast(`제목이 변경되었습니다: "${nextTitle}"`, 'success');
-    } catch (error) {
-      console.error('제목 변경 실패:', error);
-      toast('제목 변경 중 오류가 발생했습니다.', 'error');
-    }
-  };
-
-  window.editVideoDetails = function(videoId) {
-    const video = videosCache.find(v => v.id === videoId);
-    if (!video) return;
-    
-    const newTitle = prompt('새 제목을 입력하세요:', video.snippet?.title || '');
-    if (!newTitle || newTitle.trim() === '') return;
-    
-    updateVideoTitle(videoId, newTitle.trim(), video.snippet).then(() => {
-      video.snippet.title = newTitle.trim();
-      renderVideoList(videosCache);
-      toast('제목이 변경되었습니다.', 'success');
-    }).catch(error => {
-      console.error('제목 변경 실패:', error);
-      toast('제목 변경 중 오류가 발생했습니다.', 'error');
-    });
-  };
-
-  window.loadChannelVideos = function(channelId) {
-    // 해당 채널의 영상들로 필터링하는 기능 (추후 구현 가능)
-    toast('채널별 영상 필터링은 추후 구현 예정입니다.', 'info');
-  };
-
-  function clearAllData() {
-    videosCache = [];
-    myChannelsData = [];
-    subscriptionsData = [];
-    renderVideoList([]);
-    renderMyChannels([]);
-    renderSubscriptions([]);
-    $('#video-status').textContent = '영상을 불러오려면 위의 조건을 설정하고 "📥 영상 불러오기"를 클릭하세요.';
-  }
-
-  // ===== 전역 노출 함수 =====
-  window.initializeMyChannels = function() {
-    reflectLoginStatus();
-    loadMyChannelAndSubs();
-    initializeDateInputs();
-    initializePresetSystem();
-    bindVideoManagementEvents();
-  };
 
   // ===== 초기화 =====
   document.addEventListener('DOMContentLoaded', () => {
     initOAuthButtons();
-    initializeMyChannels();
-    
-    // 섹션 전환 시 '내 채널들' 들어오면 자동 새로고침
+    loadMyChannelAndSubs();
+    bindManageBoard();
+    mcLoadAll();
+    bindOpenVideoManager();
+
+    // 섹션 전환 시 ‘내 채널들’ 들어오면 자동 새로고침
     const navBtn = document.getElementById('btn-my-channels');
     if (navBtn && !navBtn.dataset.bound) {
       navBtn.dataset.bound='1';
-      navBtn.addEventListener('click', () => {
-        setTimeout(() => { 
-          reflectLoginStatus(); 
-          loadMyChannelAndSubs(); 
-          initializeMyChannels();
-        }, 50);
+      navBtn.addEventListener('click', ()=>{
+        setTimeout(()=>{ reflectLoginStatus(); loadMyChannelAndSubs(); mcLoadAll(); }, 50);
       });
     }
   });

@@ -46,108 +46,17 @@
     <main id="main-content" class="section-view">
       <!-- 내채널들 -->
       <section class="section" id="section-my-channels" data-section="my-channels" style="display:none;">
-  <div class="section-header">
-    <h2>💥 내 채널들</h2>
-    <div class="section-actions mych-controls">
-      <span id="mych-status" class="muted">로그인 필요</span>
-      <button id="btn-oauth-signin" class="btn btn-primary">🔗 Google 로그인 / 채널 연동</button>
-      <button id="btn-oauth-signout" class="btn btn-secondary" style="display:none;">🚪 로그아웃</button>
-      <button id="btn-open-video-manager" class="btn btn-success">🎬 내 영상 관리</button>
-    </div>
-  </div>
-
-<!-- 내 채널/구독 표시 영역 -->
-  <div id="my-channels-list"></div>
-  <div id="my-subscriptions-list"></div>
-
-  <!-- 영상 관리 통합 섹션 -->
-  <div id="video-management-section" style="margin-top: 20px; border-top: 2px solid var(--border); padding-top: 20px;">
-    <div class="section-header">
-      <h3>🎬 내 영상 관리</h3>
-      <div class="section-actions">
-        <button id="btn-fetch-videos" class="btn btn-primary">📥 영상 불러오기</button>
-        <button id="btn-bulk-title-edit" class="btn btn-success">✏️ 일괄 제목 수정</button>
-        <button id="btn-video-analytics" class="btn btn-info">📊 영상 분석</button>
-      </div>
-    </div>
-
-    <!-- 검색/필터 조건 -->
-    <div class="video-filters" style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
-      <div class="input-group">
-        <label>시작일:</label>
-        <input type="date" id="video-date-start" class="form-control" />
-      </div>
-      <div class="input-group">
-        <label>종료일:</label>
-        <input type="date" id="video-date-end" class="form-control" />
-      </div>
-      <div class="input-group">
-        <label>최소 조회수:</label>
-        <input type="number" id="video-min-views" class="form-control" placeholder="0" min="0" />
-      </div>
-      <div class="input-group">
-        <label>정렬:</label>
-        <select id="video-sort" class="form-control">
-          <option value="date">최신순</option>
-          <option value="views">조회수순</option>
-          <option value="title">제목순</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- 제목 프리셋 관리 -->
-    <div class="title-presets-section" style="background: var(--glass-bg); padding: 16px; border-radius: 12px; margin-bottom: 16px;">
-      <h4>🏷️ 제목 프리셋 관리</h4>
-      <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px;">
-        <span>저장된 프리셋: <strong id="preset-count">0</strong>개</span>
-        <button id="btn-save-presets" class="btn btn-primary">💾 프리셋 저장</button>
-        <button id="btn-clear-presets" class="btn btn-danger">🗑️ 전체 삭제</button>
-      </div>
-      <textarea id="preset-input" placeholder="한 줄에 하나씩 제목을 입력하세요...&#10;예시:&#10;놀라운 발견! 이것만 알면 끝&#10;완전 정복! 초보자 가이드&#10;실전 꿀팁 대공개" style="width: 100%; height: 80px; resize: vertical;"></textarea>
-      <div id="preset-preview" style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;"></div>
-    </div>
-
-    <!-- 영상 목록 테이블 -->
-    <div class="video-list-container">
-      <div id="video-status" class="muted" style="margin-bottom: 12px;">영상을 불러오려면 위의 조건을 설정하고 '📥 영상 불러오기'를 클릭하세요.</div>
-      <div class="table-responsive">
-        <table class="video-table">
-          <thead>
-            <tr>
-              <th style="width: 40px;"><input type="checkbox" id="select-all-videos" /></th>
-              <th style="width: 140px;">썸네일</th>
-              <th style="min-width: 300px;">제목 & 정보</th>
-              <th style="width: 100px;">조회수</th>
-              <th style="width: 120px;">게시일</th>
-              <th style="width: 160px;">작업</th>
-            </tr>
-          </thead>
-          <tbody id="video-table-body">
-            <tr>
-              <td colspan="6" class="text-center muted" style="padding: 40px;">영상 데이터가 없습니다.<br><small>로그인 후 영상을 불러와 주세요.</small></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- 등록된 채널 관리 (기존 기능 유지) -->
-  <div id="registered-channels-section" style="margin-top: 20px; border-top: 2px solid var(--border); padding-top: 20px;">
-    <div class="section-header">
-      <h3>📺 등록된 채널 관리</h3>
-      <div class="section-actions">
-        <button id="btn-add-channel" class="btn btn-primary">+ 채널 추가</button>
-        <button id="btn-export-channels" class="btn btn-secondary">📥 내보내기</button>
-        <button id="btn-import-channels" class="btn btn-secondary">📤 가져오기</button>
-        <input id="file-import-channels" type="file" accept=".json" style="display:none" />
-      </div>
-    </div>
-    <div id="registered-channels-list" class="channel-list horizontal-grid"></div>
-  </div>
-
-  </div>
-</section>
+        <div class="section-header">
+          <h2>👥 내 채널</h2>
+          <div class="section-actions mych-controls">
+            <button id="btn-oauth-signin" class="btn btn-primary">🔗 Google 로그인 / 채널 연동</button>
+            <button id="btn-oauth-signout" class="btn btn-secondary" style="display:none;">🚪 로그아웃</button>
+            <button id="btn-load-my-channel" class="btn btn-secondary">📥 내 채널 불러오기</button>
+            <button id="btn-load-subscriptions" class="btn btn-secondary">📥 내 구독 불러오기</button>
+            <button id="btn-export-all" class="btn btn-secondary">📦 전체 내보내기</button>
+            <button id="btn-demo" class="btn btn-secondary">🎯 데모 체험</button>
+          </div>
+        </div>
 
         <!-- my-channels.js가 채워 넣습니다 -->
         <div id="my-channels-content"></div>
